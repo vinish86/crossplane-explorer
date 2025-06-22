@@ -1,0 +1,18 @@
+out
+node_modules
+*.vsix
+*.tgz
+.nyc_output/**
+coverage/**
+
+# Artifacts from running vscode extension tests
+.vscode-test
+testOutput
+
+.vs
+test-results.xml
+dist
+stats.json
+
+# Artifacts from running npm install
+**/npm-debug.log
