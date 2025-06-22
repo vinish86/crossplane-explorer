@@ -48,55 +48,65 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
             if (!result.items || result.items.length === 0) {
                 return [];
             }
-            return result.items.map((item: any) => {
-                const name = item.metadata.name;
-                const namespace = item.metadata.namespace;
-                
-                let statusText = 'Unknown';
-                if (resourceType === 'crds') {
-                    statusText = item.spec?.scope || 'Unknown';
-                } else if (item.status && item.status.conditions) {
-                    let condition;
-                    if (resourceType === 'providers' || resourceType === 'functions') {
-                        condition = item.status.conditions.find((c: any) => c.type === 'Healthy');
-                        if (condition) {
-                            statusText = condition.status === 'True' ? 'Healthy' : 'Unhealthy';
-                        }
-                    } else {
-                        condition = item.status.conditions.find((c: any) => c.type === 'Synced');
-                        if (condition) {
-                            statusText = condition.status === 'True' ? 'Synced' : 'NotSynced';
+            const config = vscode.workspace.getConfiguration('crossplaneExplorer');
+            const excludeSuffixes: string[] = config.get('excludeCrdSuffixes', ["crossplane.io", "upbound.io", "cattle.io"]);
+            return result.items
+                .filter((item: any) => {
+                    if (resourceType === 'crds') {
+                        const name = item.metadata.name;
+                        return !excludeSuffixes.some(suffix => name.endsWith(suffix));
+                    }
+                    return true;
+                })
+                .map((item: any) => {
+                    const name = item.metadata.name;
+                    const namespace = item.metadata.namespace;
+                    
+                    let statusText = 'Unknown';
+                    if (resourceType === 'crds') {
+                        statusText = item.spec?.scope || 'Unknown';
+                    } else if (item.status && item.status.conditions) {
+                        let condition;
+                        if (resourceType === 'providers' || resourceType === 'functions') {
+                            condition = item.status.conditions.find((c: any) => c.type === 'Healthy');
+                            if (condition) {
+                                statusText = condition.status === 'True' ? 'Healthy' : 'Unhealthy';
+                            }
+                        } else {
+                            condition = item.status.conditions.find((c: any) => c.type === 'Synced');
+                            if (condition) {
+                                statusText = condition.status === 'True' ? 'Synced' : 'NotSynced';
+                            }
                         }
                     }
-                }
-                
-                let fullResourceType = resourceType;
-                let displayKind = '';
-                if (resourceType === 'composite' || resourceType === 'claim' || resourceType === 'managed') {
-                    const apiVersion = item.apiVersion; // e.g., az.composite.scc.allianz.io/v1alpha1
-                    const kind = item.kind; // e.g., XcidrAllocator
-                    const group = apiVersion.split('/')[0]; // e.g., az.composite.scc.allianz.io
-                    fullResourceType = `${kind.toLowerCase()}.${group}`;
-                    displayKind = `${kind}.${group}`;
-                }
-                // Special handling for CRDs
-                let crdResourceType = fullResourceType;
-                if (resourceType === 'crds') {
-                    crdResourceType = 'crd';
-                }
-                const label = (resourceType === 'composite' || resourceType === 'claim' || resourceType === 'managed')
-                    ? (namespace ? `${displayKind} | ${name} ${namespace} | ${statusText}` : `${displayKind} | ${name} | ${statusText}`)
-                    : (namespace ? `${name} ${namespace} | ${statusText}` : `${name} | ${statusText}`);
-                const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, crdResourceType, name, namespace);
-                if (name) {
-                    resource.command = {
-                        command: 'crossplane-explorer.openResource',
-                        title: 'Open Resource YAML',
-                        arguments: [resource]
-                    };
-                }
-                return resource;
-            });
+                    
+                    let fullResourceType = resourceType;
+                    let displayKind = '';
+                    if (resourceType === 'composite' || resourceType === 'claim' || resourceType === 'managed') {
+                        const apiVersion = item.apiVersion; // e.g., az.composite.scc.allianz.io/v1alpha1
+                        const kind = item.kind; // e.g., XcidrAllocator
+                        const group = apiVersion.split('/')[0]; // e.g., az.composite.scc.allianz.io
+                        fullResourceType = `${kind.toLowerCase()}.${group}`;
+                        displayKind = `${kind}.${group}`;
+                    }
+                    // Special handling for CRDs
+                    let crdResourceType = fullResourceType;
+                    if (resourceType === 'crds') {
+                        crdResourceType = 'crd';
+                    }
+                    const label = (resourceType === 'composite' || resourceType === 'claim' || resourceType === 'managed')
+                        ? (namespace ? `${displayKind} | ${name} ${namespace} | ${statusText}` : `${displayKind} | ${name} | ${statusText}`)
+                        : (namespace ? `${name} ${namespace} | ${statusText}` : `${name} | ${statusText}`);
+                    const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, crdResourceType, name, namespace);
+                    if (name) {
+                        resource.command = {
+                            command: 'crossplane-explorer.openResource',
+                            title: 'Open Resource YAML',
+                            arguments: [resource]
+                        };
+                    }
+                    return resource;
+                });
         } catch (err: any) {
             if (err instanceof Error) {
                 vscode.window.showErrorMessage(`Error getting kubectl resources: ${err.message}`);

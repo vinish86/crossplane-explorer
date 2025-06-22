@@ -53,6 +53,17 @@
           "group": "navigation"
         }
       ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Crossplane Explorer",
+      "properties": {
+        "crossplaneExplorer.excludeCrdSuffixes": {
+          "type": "array",
+          "default": ["crossplane.io", "upbound.io", "cattle.io"],
+          "description": "CRD suffixes to exclude from the CRD list."
+        }
+      }
     }
   },
   "scripts": {

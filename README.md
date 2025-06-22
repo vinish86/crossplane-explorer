@@ -10,6 +10,34 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 - **One-Click Refresh**: Instantly refresh the resource list with the refresh button.
 - **Beautiful Icons**: Each resource type has a clear, modern icon for easy navigation.
 
+## Example: Tree View and YAML Editing
+
+Below is an example of the Crossplane Explorer tree view and editing a resource's YAML:
+
+![Crossplane Explorer tree view and YAML editing](resources/screenshots/tree-and-yaml.png)
+
+## Performance & Safety: Exclude Core CRDs
+
+To improve performance and reduce clutter, the extension allows you to exclude CRDs whose names end with certain suffixes (such as `crossplane.io`, `upbound.io`, `cattle.io`). This also helps prevent accidental editing of critical Crossplane, Upbound, or Rancher (cattle) CRDs.
+
+You can configure the excluded suffixes in your VS Code settings:
+
+- **Settings UI:**
+  1. Open Command Palette (`Cmd+Shift+P`/`Ctrl+Shift+P`), type `Preferences: Open Settings (UI)`.
+  2. Search for `Crossplane Explorer`.
+  3. Edit **CRD Suffixes to Exclude from the CRD List**.
+
+- **settings.json:**
+  ```json
+  "crossplaneExplorer.excludeCrdSuffixes": [
+    "crossplane.io",
+    "upbound.io",
+    "cattle.io"
+  ]
+  ```
+
+By default, these suffixes are excluded. You can customize this list to fit your needs.
+
 ## Requirements
 
 - [VS Code](https://code.visualstudio.com/)
