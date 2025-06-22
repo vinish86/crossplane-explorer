@@ -70,14 +70,31 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     }
                 }
                 
-                const label = namespace ? `${name} ${namespace} | ${statusText}` : `${name} | ${statusText}`;
-                const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, resourceType, name, namespace);
-                
-                resource.command = {
-                    command: 'crossplane-explorer.openResource',
-                    title: 'Open Resource YAML',
-                    arguments: [resource]
-                };
+                let fullResourceType = resourceType;
+                let displayKind = '';
+                if (resourceType === 'composite' || resourceType === 'claim' || resourceType === 'managed') {
+                    const apiVersion = item.apiVersion; // e.g., az.composite.scc.allianz.io/v1alpha1
+                    const kind = item.kind; // e.g., XcidrAllocator
+                    const group = apiVersion.split('/')[0]; // e.g., az.composite.scc.allianz.io
+                    fullResourceType = `${kind.toLowerCase()}.${group}`;
+                    displayKind = `${kind}.${group}`;
+                }
+                // Special handling for CRDs
+                let crdResourceType = fullResourceType;
+                if (resourceType === 'crds') {
+                    crdResourceType = 'crd';
+                }
+                const label = (resourceType === 'composite' || resourceType === 'claim' || resourceType === 'managed')
+                    ? (namespace ? `${displayKind} | ${name} ${namespace} | ${statusText}` : `${displayKind} | ${name} | ${statusText}`)
+                    : (namespace ? `${name} ${namespace} | ${statusText}` : `${name} | ${statusText}`);
+                const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, crdResourceType, name, namespace);
+                if (name) {
+                    resource.command = {
+                        command: 'crossplane-explorer.openResource',
+                        title: 'Open Resource YAML',
+                        arguments: [resource]
+                    };
+                }
                 return resource;
             });
         } catch (err: any) {

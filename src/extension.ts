@@ -54,15 +54,43 @@ export function activate(context: vscode.ExtensionContext) {
 		try {
             openingResources.add(resourceKey);
 
-			const getArgs = ['get', resource.resourceType, resource.resourceName];
-			if (resource.namespace) {
-				getArgs.push('-n', resource.namespace);
-			}
-			getArgs.push('-o', 'yaml');
+            let resourceType = resource.resourceType;
+            if (resourceType === 'functions') {
+                resourceType = 'functions.pkg.crossplane.io';
+            }
+            // Special handling for CRDs
+            if (resourceType === 'crd') {
+                resourceType = 'crd';
+            }
+            let getArgs: string[];
+            if (
+                resourceType === 'crd' ||
+                resourceType === 'compositions' ||
+                resourceType === 'providers' ||
+                resourceType === 'functions.pkg.crossplane.io'
+            ) {
+                getArgs = ['get', resourceType, resource.resourceName];
+            } else if (resourceType && resourceType.includes('.') && resource.resourceName) {
+                getArgs = ['get', `${resourceType}/${resource.resourceName}`];
+            } else {
+                getArgs = ['get', resourceType, resource.resourceName];
+            }
+            if (resource.namespace) {
+                getArgs.push('-n', resource.namespace);
+            }
+            getArgs.push('-o', 'yaml');
+
+            // Debug log
+            console.log('Running command:', 'kubectl', ...getArgs);
+
 			const { stdout } = await executeCommand('kubectl', getArgs);
 
 			// Clean the YAML before writing to file
 			const resourceYaml: any = yaml.load(stdout);
+			if (resourceYaml && resourceYaml.kind === 'List') {
+				vscode.window.showErrorMessage('Selected item is not a single resource. Please select a specific object.');
+				return;
+			}
 			if (resourceYaml && resourceYaml.metadata) {
 				delete resourceYaml.metadata.uid;
 				delete resourceYaml.metadata.resourceVersion;
