@@ -29,6 +29,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(vscode.commands.registerCommand('crossplane-explorer.openResource', async (resource: CrossplaneResource) => {
 		if (!resource.resourceType || !resource.resourceName) {
+			vscode.window.showErrorMessage('Cannot open resource: resource name is missing.');
 			return;
 		}
 		

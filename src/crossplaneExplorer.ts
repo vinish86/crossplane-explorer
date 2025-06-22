@@ -32,7 +32,11 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
         
         try {
             const resourceType = element.label;
-            const { stdout, stderr } = await executeCommand('kubectl', ['get', resourceType, '-o', 'json']);
+            let args = ['get', resourceType, '-o', 'json'];
+            if (resourceType === 'claim') {
+                args = ['get', resourceType, '--all-namespaces', '-o', 'json'];
+            }
+            const { stdout, stderr } = await executeCommand('kubectl', args);
             if (stderr && !stdout) {
                 vscode.window.showErrorMessage(stderr);
                 return [];
