@@ -26,6 +26,14 @@
         "command": "crossplane-explorer.refresh",
         "title": "Refresh",
         "icon": "$(extensions-refresh)"
+      },
+      {
+        "command": "crossplane-explorer.viewResource",
+        "title": "View Resource YAML"
+      },
+      {
+        "command": "crossplane-explorer.editResource",
+        "title": "Edit Resource YAML"
       }
     ],
     "viewsContainers": {
@@ -49,6 +57,13 @@
       "view/title": [
         {
           "command": "crossplane-explorer.refresh",
+          "when": "view == crossplaneExplorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "crossplane-explorer.editResource",
           "when": "view == crossplaneExplorer",
           "group": "navigation"
         }

@@ -9,7 +9,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 
 const resourceToTempFileMap = new Map<string, string>();
-const tempFileToResourceMap = new Map<string, CrossplaneResource>();
+const tempFileToResourceMap = new Map<string, string>();
 const openingResources = new Set<string>();
 
 // This method is called when your extension is activated
@@ -107,15 +107,175 @@ export function activate(context: vscode.ExtensionContext) {
             fs.writeFileSync(tempFilePath, cleanedYaml);
             
             resourceToTempFileMap.set(resourceKey, tempFilePath);
-            tempFileToResourceMap.set(tempFilePath, resource);
+            tempFileToResourceMap.set(tempFilePath, resourceKey);
 
 			const doc = await vscode.workspace.openTextDocument(tempFilePath);
-			await vscode.window.showTextDocument(doc, { preview: false });
+			await vscode.window.showTextDocument(doc, { preview: true });
 		} catch (err: any) {
 			vscode.window.showErrorMessage(`Failed to get resource YAML: ${err.message}`);
 		} finally {
             openingResources.delete(resourceKey);
         }
+	}));
+
+	// Use separate temp files for view and edit modes
+	function getResourceKey(resource: CrossplaneResource, mode: 'view' | 'edit') {
+		return `${resource.resourceType}:${resource.namespace || ''}:${resource.resourceName}:${mode}`;
+	}
+
+	function getAllTempFilePaths(resource: CrossplaneResource) {
+		const keys = [
+			getResourceKey(resource, 'view'),
+			getResourceKey(resource, 'edit')
+		];
+		return keys
+			.map(key => resourceToTempFileMap.get(key))
+			.filter((p): p is string => !!p);
+	}
+
+	context.subscriptions.push(vscode.commands.registerCommand('crossplane-explorer.viewResource', async (resource: CrossplaneResource) => {
+		if (!resource.resourceType || !resource.resourceName) {
+			vscode.window.showErrorMessage('Cannot view resource: resource name is missing.');
+			return;
+		}
+		const resourceKey = getResourceKey(resource, 'view');
+		if (openingResources.has(resourceKey)) {
+			return;
+		}
+		try {
+			openingResources.add(resourceKey);
+			let resourceType = resource.resourceType;
+			if (resourceType === 'functions') {
+				resourceType = 'functions.pkg.crossplane.io';
+			}
+			if (resourceType === 'crd') {
+				resourceType = 'crd';
+			}
+			let getArgs: string[];
+			if (
+				resourceType === 'crd' ||
+				resourceType === 'compositions' ||
+				resourceType === 'providers' ||
+				resourceType === 'functions.pkg.crossplane.io'
+			) {
+				getArgs = ['get', resourceType, resource.resourceName];
+			} else if (resourceType && resourceType.includes('.') && resource.resourceName) {
+				getArgs = ['get', `${resourceType}/${resource.resourceName}`];
+			} else {
+				getArgs = ['get', resourceType, resource.resourceName];
+			}
+			if (resource.namespace) {
+				getArgs.push('-n', resource.namespace);
+			}
+			getArgs.push('-o', 'yaml');
+			const { stdout } = await executeCommand('kubectl', getArgs);
+			const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossplane-explorer-'));
+			const fileName = `${resource.resourceType}-${resource.resourceName}-view.yaml`;
+			const tempFilePath = path.join(tempDir, fileName);
+			const banneredYaml = `# VIEW MODE: This file is read-only\n${stdout}`;
+			fs.writeFileSync(tempFilePath, banneredYaml);
+			resourceToTempFileMap.set(resourceKey, tempFilePath);
+			tempFileToResourceMap.set(tempFilePath, resourceKey);
+			// Close any open tab for this resource (view or edit)
+			const allPaths = getAllTempFilePaths(resource);
+			for (const editor of vscode.window.visibleTextEditors) {
+				if (allPaths.includes(editor.document.fileName)) {
+					await vscode.window.showTextDocument(editor.document, { preview: true });
+					await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+				}
+			}
+			const doc = await vscode.workspace.openTextDocument(tempFilePath);
+			await vscode.window.showTextDocument(doc, { preview: true });
+		} catch (err: any) {
+			vscode.window.showErrorMessage(`Failed to view resource YAML: ${err.message}`);
+		} finally {
+			openingResources.delete(resourceKey);
+		}
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('crossplane-explorer.editResource', async (resource: CrossplaneResource) => {
+		if (!resource.resourceType || !resource.resourceName) {
+			vscode.window.showErrorMessage('Cannot edit resource: resource name is missing.');
+			return;
+		}
+		const resourceKey = getResourceKey(resource, 'edit');
+		if (openingResources.has(resourceKey)) {
+			return;
+		}
+		if (resourceToTempFileMap.has(resourceKey)) {
+			const tempFilePath = resourceToTempFileMap.get(resourceKey)!;
+			try {
+				const doc = await vscode.workspace.openTextDocument(tempFilePath);
+				await vscode.window.showTextDocument(doc, { preview: false });
+				return;
+			} catch (error) {
+				resourceToTempFileMap.delete(resourceKey);
+				tempFileToResourceMap.delete(tempFilePath);
+			}
+		}
+		try {
+			openingResources.add(resourceKey);
+			let resourceType = resource.resourceType;
+			if (resourceType === 'functions') {
+				resourceType = 'functions.pkg.crossplane.io';
+			}
+			if (resourceType === 'crd') {
+				resourceType = 'crd';
+			}
+			let getArgs: string[];
+			if (
+				resourceType === 'crd' ||
+				resourceType === 'compositions' ||
+				resourceType === 'providers' ||
+				resourceType === 'functions.pkg.crossplane.io'
+			) {
+				getArgs = ['get', resourceType, resource.resourceName];
+			} else if (resourceType && resourceType.includes('.') && resource.resourceName) {
+				getArgs = ['get', `${resourceType}/${resource.resourceName}`];
+			} else {
+				getArgs = ['get', resourceType, resource.resourceName];
+			}
+			if (resource.namespace) {
+				getArgs.push('-n', resource.namespace);
+			}
+			getArgs.push('-o', 'yaml');
+			const { stdout } = await executeCommand('kubectl', getArgs);
+			const resourceYaml: any = yaml.load(stdout);
+			if (resourceYaml && resourceYaml.kind === 'List') {
+				vscode.window.showErrorMessage('Selected item is not a single resource. Please select a specific object.');
+				return;
+			}
+			if (resourceYaml && resourceYaml.metadata) {
+				delete resourceYaml.metadata.uid;
+				delete resourceYaml.metadata.resourceVersion;
+				delete resourceYaml.metadata.creationTimestamp;
+				delete resourceYaml.metadata.managedFields;
+				delete resourceYaml.metadata.annotations?.['kubectl.kubernetes.io/last-applied-configuration'];
+			}
+			delete resourceYaml.status;
+			const cleanedYaml = yaml.dump(resourceYaml);
+			const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossplane-explorer-'));
+			const fileName = `${resource.resourceType}-${resource.resourceName}-edit.yaml`;
+			const tempFilePath = path.join(tempDir, fileName);
+			const banneredYaml = `# EDIT MODE: You can edit and apply changes to this resource\n${cleanedYaml}`;
+			fs.writeFileSync(tempFilePath, banneredYaml);
+			resourceToTempFileMap.set(resourceKey, tempFilePath);
+			tempFileToResourceMap.set(tempFilePath, resourceKey);
+			// Close any open tab for this resource (view or edit)
+			const allPaths = getAllTempFilePaths(resource);
+			for (const editor of vscode.window.visibleTextEditors) {
+				if (allPaths.includes(editor.document.fileName)) {
+					await vscode.window.showTextDocument(editor.document, { preview: false });
+					await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+				}
+			}
+			const doc = await vscode.workspace.openTextDocument(tempFilePath);
+			await vscode.window.showTextDocument(doc, { preview: false });
+		} catch (err: any) {
+			vscode.window.showErrorMessage(`Failed to get resource YAML: ${err.message}`);
+		} finally {
+			openingResources.delete(resourceKey);
+		}
 	}));
 
 	context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(async (document) => {
@@ -143,12 +303,11 @@ export function activate(context: vscode.ExtensionContext) {
         }
     }));
 
+    // Update close logic to clean up correct temp file
     context.subscriptions.push(vscode.workspace.onDidCloseTextDocument((document) => {
         const filePath = document.uri.fsPath;
         if (tempFileToResourceMap.has(filePath)) {
-            const resource = tempFileToResourceMap.get(filePath)!;
-            const resourceKey = `${resource.resourceType}:${resource.namespace || ''}:${resource.resourceName}`;
-            
+            const resourceKey = tempFileToResourceMap.get(filePath)!;
             const dirPath = path.dirname(filePath);
             fs.unlink(filePath, (err) => {
                 if (err) { console.error(`Failed to delete temp file ${filePath}: ${err}`); }

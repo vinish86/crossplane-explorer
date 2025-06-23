@@ -100,8 +100,8 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, crdResourceType, name, namespace);
                     if (name) {
                         resource.command = {
-                            command: 'crossplane-explorer.openResource',
-                            title: 'Open Resource YAML',
+                            command: 'crossplane-explorer.viewResource',
+                            title: 'View Resource YAML',
                             arguments: [resource]
                         };
                     }
