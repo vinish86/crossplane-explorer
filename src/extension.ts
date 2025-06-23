@@ -288,14 +288,20 @@ export function activate(context: vscode.ExtensionContext) {
             }, async () => {
                 try {
                     const fileContent = document.getText();
+                    // Validate YAML before applying
+                    try {
+                        yaml.load(fileContent);
+                    } catch (e: any) {
+                        vscode.window.showErrorMessage('YAML Error: ' + e.message);
+                        return;
+                    }
                     const { stderr } = await executeCommandWithStdin('kubectl', ['apply', '-f', '-', '--server-side', '--force-conflicts'], fileContent);
-                    
                     if (stderr) {
-                         vscode.window.showErrorMessage(`Failed to apply changes: ${stderr}`);
-                         return;
+                        vscode.window.showErrorMessage(`Failed to apply changes: ${stderr}`);
+                        return;
                     }
                     vscode.window.showInformationMessage(`Successfully applied changes to ${path.basename(filePath)}`);
-					crossplaneExplorerProvider.refresh();
+                    crossplaneExplorerProvider.refresh();
                 } catch (err: any) {
                     vscode.window.showErrorMessage(`Failed to apply changes: ${err.message}`);
                 }

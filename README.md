@@ -10,11 +10,25 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 - **One-Click Refresh**: Instantly refresh the resource list with the refresh button.
 - **Beautiful Icons**: Each resource type has a clear, modern icon for easy navigation.
 
+## Viewing and Editing Resources
+
+- **Single-click** any resource to open its YAML in **read-only mode**. This view includes the full resource, including the `status` field, and is clearly marked with a banner at the top:
+  ```yaml
+  # VIEW MODE: This file is read-only
+  ...
+  ```
+- To **edit** a resource, **right-click** and select **Edit Resource YAML**. This opens the YAML in editable mode (with status and managed fields removed), and a banner at the top indicates:
+  ```yaml
+  # EDIT MODE: You can edit and apply changes to this resource
+  ...
+  ```
+- Only one tab per resource is open at a time—switching between view and edit will close the other mode's tab automatically.
+
 ## Example: Tree View and YAML Editing
 
 Below is an example of the Crossplane Explorer tree view and editing a resource's YAML:
 
-![Crossplane Explorer tree view and YAML editing](resources/screenshots/tree-and-yaml.png)
+![Crossplane Explorer tree view and YAML editing](resources/screenshots/edit-option.gif)
 
 ## Performance & Safety: Exclude Core CRDs
 
