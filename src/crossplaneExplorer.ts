@@ -56,7 +56,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     const [namespace, name] = line.split(/\s+/);
                     const label = `${name} (${namespace})`;
                     const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, 'logs-provider-pod', name, namespace);
-                    resource.iconPath = new vscode.ThemeIcon('container');
+                    resource.iconPath = new vscode.ThemeIcon('package');
                     resource.contextValue = 'logs-provider-pod';
                     resource.command = {
                         command: 'crossplane-explorer.showPodDetails',
@@ -88,7 +88,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     const [namespace, name] = line.split(/\s+/);
                     const label = `${name} (${namespace})`;
                     const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, 'logs-function-pod', name, namespace);
-                    resource.iconPath = new vscode.ThemeIcon('container');
+                    resource.iconPath = new vscode.ThemeIcon('package');
                     resource.contextValue = 'logs-provider-pod';
                     resource.command = {
                         command: 'crossplane-explorer.showPodDetails',
@@ -120,7 +120,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     const [namespace, name] = line.split(/\s+/);
                     const label = `${name} (${namespace})`;
                     const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, 'logs-crossplane-pod', name, namespace);
-                    resource.iconPath = new vscode.ThemeIcon('container');
+                    resource.iconPath = new vscode.ThemeIcon('package');
                     resource.contextValue = 'logs-provider-pod';
                     resource.command = {
                         command: 'crossplane-explorer.showPodDetails',
@@ -138,8 +138,49 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
             return Promise.resolve([]);
         }
         
-        if (element.label === 'object-mapping') {
-            // Group by claim: show claims at root, each with its top-level XR(s) as children
+        if (element.label === 'claim') {
+            try {
+                const { stdout } = await executeCommand('kubectl', [
+                    'get', 'claim', '--all-namespaces', '-o', 'json'
+                ]);
+                const result = JSON.parse(stdout);
+                if (!result.items || result.items.length === 0) {
+                    return [];
+                }
+                return result.items.map((item: any) => {
+                    const kind = item.kind;
+                    const apiVersion = item.apiVersion || '';
+                    const group = apiVersion.split('/')[0] || '';
+                    const resourceType = group ? `${kind.toLowerCase()}.${group}` : kind.toLowerCase();
+                    const name = item.metadata.name;
+                    const namespace = item.metadata.namespace;
+                    const label = `[claim] | ${resourceType} | ${name} | ${namespace}`;
+                    const node = new CrossplaneResource(
+                        label,
+                        vscode.TreeItemCollapsibleState.None,
+                        resourceType,
+                        name,
+                        namespace
+                    );
+                    node.command = {
+                        command: 'crossplane-explorer.viewResource',
+                        title: 'View Resource YAML',
+                        arguments: [node]
+                    };
+                    console.log('[DEBUG] Set .command for claim node:', {
+                        label,
+                        resourceType,
+                        name,
+                        namespace
+                    });
+                    return node;
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching claims: ${err.message}`);
+                return [];
+            }
+        }
+        if (element.label === 'deployment-flow') {
             try {
                 const { stdout } = await executeCommand('kubectl', [
                     'get', 'composite', '-o', 'json'
@@ -147,12 +188,18 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                 const result = JSON.parse(stdout);
                 if (!result.items || result.items.length === 0) return [];
 
-                // Group composites by claimRef
+                // Group composites by claimRef (only those with claimRef)
                 const claimsMap = new Map<string, { claimRef: any, composites: any[] }>();
                 for (const item of result.items) {
                     const claimRef = item.spec?.claimRef;
                     if (claimRef && claimRef.name && claimRef.kind && claimRef.namespace) {
-                        const claimKey = `${claimRef.kind}|${claimRef.name}|${claimRef.namespace}`;
+                        const kind = claimRef.kind;
+                        const apiVersion = claimRef.apiVersion || '';
+                        const group = apiVersion.split('/')[0] || '';
+                        const resourceType = group ? `${kind.toLowerCase()}.${group}` : kind.toLowerCase();
+                        const name = claimRef.name;
+                        const namespace = claimRef.namespace;
+                        const claimKey = `${resourceType}|${name}|${namespace}`;
                         if (!claimsMap.has(claimKey)) {
                             claimsMap.set(claimKey, { claimRef, composites: [] });
                         }
@@ -160,18 +207,28 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     }
                 }
 
-                // Create claim nodes at the root
+                // Create claim nodes at the root (only those referenced by a composite)
                 return Array.from(claimsMap.values()).map(({ claimRef, composites }) => {
-                    const claimLabel = `[claim] | ${claimRef.kind} | ${claimRef.name} | ${claimRef.namespace}`;
+                    const kind = claimRef.kind;
+                    const apiVersion = claimRef.apiVersion || '';
+                    const group = apiVersion.split('/')[0] || '';
+                    const resourceType = group ? `${kind.toLowerCase()}.${group}` : kind.toLowerCase();
+                    const name = claimRef.name;
+                    const namespace = claimRef.namespace;
+                    const label = `[claim] | ${resourceType} | ${name} | ${namespace}`;
                     const claimNode = new CrossplaneResource(
-                        claimLabel,
+                        label,
                         vscode.TreeItemCollapsibleState.Collapsed,
-                        'object-mapping-claim',
-                        claimRef.name,
-                        claimRef.namespace
+                        resourceType,
+                        name,
+                        namespace
                     );
-                    (claimNode as any)._claimKind = claimRef.kind;
-                    (claimNode as any)._claimApiVersion = claimRef.apiVersion || '';
+                    claimNode.command = {
+                        command: 'crossplane-explorer.viewResource',
+                        title: 'View Resource YAML',
+                        arguments: [claimNode]
+                    };
+                    claimNode.contextValue = 'deployment-flow-claim';
                     (claimNode as any)._childComposites = composites;
                     return claimNode;
                 });
@@ -180,7 +237,8 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                 return [];
             }
         }
-        if (element.resourceType === 'object-mapping-claim') {
+        // For expanding child XRs/MRs under deployment-flow claim nodes
+        if (element.contextValue === 'deployment-flow-claim') {
             // Show all top-level XRs for this claim
             const composites = (element as any)._childComposites || [];
             return composites.map((composite: any) => {
@@ -243,7 +301,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
         try {
             const resourceType = element.label;
             let args = ['get', resourceType, '-o', 'json'];
-            if (resourceType === 'claim' || resourceType === 'composite' || resourceType === 'managed') {
+            if (resourceType === 'crds') {
                 args = ['get', resourceType, '--all-namespaces', '-o', 'json'];
             }
             if (resourceType === 'functions') {
@@ -328,7 +386,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
     }
 
     private getRootItems(): CrossplaneResource[] {
-        const itemLabels = ['managed', 'composite', 'compositions', 'claim', 'crds', 'providers', 'functions', 'logs', 'object-mapping'];
+        const itemLabels = ['compositions', 'crds', 'providers', 'functions', 'logs', 'deployment-flow'];
         return itemLabels.map(label => new CrossplaneResource(label, vscode.TreeItemCollapsibleState.Collapsed));
     }
 }
