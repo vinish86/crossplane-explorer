@@ -12,6 +12,9 @@ const resourceToTempFileMap = new Map<string, string>();
 const tempFileToResourceMap = new Map<string, string>();
 const openingResources = new Set<string>();
 
+// Map to track output channel to process
+const logProcessMap = new WeakMap<vscode.OutputChannel, any>();
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -336,6 +339,66 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	context.subscriptions.push(disposable);
+
+	context.subscriptions.push(vscode.commands.registerCommand('crossplane-explorer.showPodDetails', async (resource: CrossplaneResource) => {
+		if (!resource.resourceName || !resource.namespace) {
+			vscode.window.showErrorMessage('Pod name or namespace missing.');
+			return;
+		}
+		try {
+			const { stdout, stderr } = await executeCommand('kubectl', [
+				'get', 'pod', resource.resourceName, '-n', resource.namespace, '-o', 'yaml'
+			]);
+			if (stderr && !stdout) {
+				vscode.window.showErrorMessage(stderr);
+				return;
+			}
+			const banneredYaml = `# VIEW MODE: This file is read-only\n${stdout}`;
+			const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossplane-explorer-'));
+			const fileName = `pod-${resource.resourceName}-view.yaml`;
+			const tempFilePath = path.join(tempDir, fileName);
+			fs.writeFileSync(tempFilePath, banneredYaml);
+			const doc = await vscode.workspace.openTextDocument(tempFilePath);
+			await vscode.window.showTextDocument(doc, { preview: true });
+		} catch (err: any) {
+			vscode.window.showErrorMessage(`Failed to get pod YAML: ${err.message}`);
+		}
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('crossplane-explorer.tailPodLogs', async (resource: CrossplaneResource) => {
+		if (!resource.resourceName || !resource.namespace) {
+			vscode.window.showErrorMessage('Pod name or namespace missing.');
+			return;
+		}
+		const outputChannel = vscode.window.createOutputChannel(`Logs: ${resource.resourceName}`);
+		outputChannel.show(true);
+		outputChannel.appendLine(`# kubectl logs -f ${resource.resourceName} -n ${resource.namespace}`);
+		const cp = require('child_process');
+		const logProcess = cp.spawn('kubectl', [
+			'logs', '-f', resource.resourceName, '-n', resource.namespace
+		]);
+		logProcess.stdout.on('data', (data: Buffer) => {
+			outputChannel.append(data.toString());
+		});
+		logProcess.stderr.on('data', (data: Buffer) => {
+			outputChannel.append(data.toString());
+		});
+		logProcess.on('close', (code: number) => {
+			outputChannel.appendLine(`\n[Process exited with code ${code}]`);
+		});
+		logProcessMap.set(outputChannel, logProcess);
+		// Dispose log process when output channel is closed
+		const disposable = vscode.Disposable.from({
+			dispose: () => {
+				const proc = logProcessMap.get(outputChannel);
+				if (proc) {
+					proc.kill();
+					logProcessMap.delete(outputChannel);
+				}
+			}
+		});
+		context.subscriptions.push(disposable);
+	}));
 }
 
 // This method is called when your extension is deactivated

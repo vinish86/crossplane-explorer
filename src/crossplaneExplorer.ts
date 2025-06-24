@@ -30,6 +30,114 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
             return Promise.resolve(this.getRootItems());
         }
         
+        if (element.label === 'logs') {
+            return Promise.resolve([
+                new CrossplaneResource('providers', vscode.TreeItemCollapsibleState.Collapsed, 'logs-providers'),
+                new CrossplaneResource('functions', vscode.TreeItemCollapsibleState.Collapsed, 'logs-functions'),
+                new CrossplaneResource('crossplane', vscode.TreeItemCollapsibleState.Collapsed, 'logs-crossplane'),
+            ]);
+        }
+        
+        if (element.resourceType === 'logs-providers') {
+            // List all pods with label 'pkg.crossplane.io/provider'
+            try {
+                const { stdout, stderr } = await executeCommand('kubectl', [
+                    'get', 'pods', '--all-namespaces',
+                    '-l', 'pkg.crossplane.io/provider',
+                    '-o', "custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name", '--no-headers'
+                ]);
+                if (stderr && !stdout) {
+                    vscode.window.showErrorMessage(stderr);
+                    return [];
+                }
+                // Each line: NAMESPACE NAME
+                const pods = stdout.split('\n').filter(line => line.trim().length > 0);
+                return pods.map(line => {
+                    const [namespace, name] = line.split(/\s+/);
+                    const label = `${name} (${namespace})`;
+                    const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, 'logs-provider-pod', name, namespace);
+                    resource.iconPath = new vscode.ThemeIcon('container');
+                    resource.contextValue = 'logs-provider-pod';
+                    resource.command = {
+                        command: 'crossplane-explorer.showPodDetails',
+                        title: 'Show Pod Details',
+                        arguments: [resource]
+                    };
+                    return resource;
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching provider pods: ${err.message}`);
+                return [];
+            }
+        }
+        if (element.resourceType === 'logs-functions') {
+            // List all pods with label 'pkg.crossplane.io/function'
+            try {
+                const { stdout, stderr } = await executeCommand('kubectl', [
+                    'get', 'pods', '--all-namespaces',
+                    '-l', 'pkg.crossplane.io/function',
+                    '-o', "custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name", '--no-headers'
+                ]);
+                if (stderr && !stdout) {
+                    vscode.window.showErrorMessage(stderr);
+                    return [];
+                }
+                // Each line: NAMESPACE NAME
+                const pods = stdout.split('\n').filter(line => line.trim().length > 0);
+                return pods.map(line => {
+                    const [namespace, name] = line.split(/\s+/);
+                    const label = `${name} (${namespace})`;
+                    const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, 'logs-function-pod', name, namespace);
+                    resource.iconPath = new vscode.ThemeIcon('container');
+                    resource.contextValue = 'logs-provider-pod';
+                    resource.command = {
+                        command: 'crossplane-explorer.showPodDetails',
+                        title: 'Show Pod Details',
+                        arguments: [resource]
+                    };
+                    return resource;
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching function pods: ${err.message}`);
+                return [];
+            }
+        }
+        if (element.resourceType === 'logs-crossplane') {
+            // List all pods with label 'release=crossplane'
+            try {
+                const { stdout, stderr } = await executeCommand('kubectl', [
+                    'get', 'pods', '--all-namespaces',
+                    '-l', 'release=crossplane',
+                    '-o', "custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name", '--no-headers'
+                ]);
+                if (stderr && !stdout) {
+                    vscode.window.showErrorMessage(stderr);
+                    return [];
+                }
+                // Each line: NAMESPACE NAME
+                const pods = stdout.split('\n').filter(line => line.trim().length > 0);
+                return pods.map(line => {
+                    const [namespace, name] = line.split(/\s+/);
+                    const label = `${name} (${namespace})`;
+                    const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, 'logs-crossplane-pod', name, namespace);
+                    resource.iconPath = new vscode.ThemeIcon('container');
+                    resource.contextValue = 'logs-provider-pod';
+                    resource.command = {
+                        command: 'crossplane-explorer.showPodDetails',
+                        title: 'Show Pod Details',
+                        arguments: [resource]
+                    };
+                    return resource;
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching crossplane pods: ${err.message}`);
+                return [];
+            }
+        }
+        if (element.resourceType && element.resourceType.startsWith('logs-')) {
+            return Promise.resolve([]);
+        }
+        
         try {
             const resourceType = element.label;
             let args = ['get', resourceType, '-o', 'json'];
@@ -118,7 +226,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
     }
 
     private getRootItems(): CrossplaneResource[] {
-        const itemLabels = ['managed', 'composite', 'compositions', 'claim', 'crds', 'providers', 'functions'];
+        const itemLabels = ['managed', 'composite', 'compositions', 'claim', 'crds', 'providers', 'functions', 'logs'];
         return itemLabels.map(label => new CrossplaneResource(label, vscode.TreeItemCollapsibleState.Collapsed));
     }
 }
@@ -162,6 +270,24 @@ export class CrossplaneResource extends vscode.TreeItem {
                     break;
                 case 'functions':
                     this.iconPath = new vscode.ThemeIcon('symbol-function');
+                    break;
+                case 'logs':
+                    this.iconPath = new vscode.ThemeIcon('output');
+                    break;
+                case 'providers':
+                    if (this.resourceType && this.resourceType.startsWith('logs-')) {
+                        this.iconPath = new vscode.ThemeIcon('plug');
+                    }
+                    break;
+                case 'functions':
+                    if (this.resourceType && this.resourceType.startsWith('logs-')) {
+                        this.iconPath = new vscode.ThemeIcon('symbol-function');
+                    }
+                    break;
+                case 'crossplane':
+                    if (this.resourceType && this.resourceType.startsWith('logs-')) {
+                        this.iconPath = new vscode.ThemeIcon('cloud');
+                    }
                     break;
             }
         }
