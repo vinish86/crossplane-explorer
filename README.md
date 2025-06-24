@@ -10,6 +10,22 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 - **One-Click Refresh**: Instantly refresh the resource list with the refresh button.
 - **Beautiful Icons**: Each resource type has a clear, modern icon for easy navigation.
 
+## Deployment Tree Structure: claim > XR > MR
+
+The **deployment-flow** view implements a hierarchical tree structure for Crossplane resources:
+
+- **Claim**: At the top level, each claim node represents a user-facing resource claim.
+- **XR (Composite Resource)**: Expanding a claim node shows all top-level composite resources (XRs) that reference the claim.
+- **MR (Managed Resource)**: Expanding an XR node shows its child composite resources and managed resources (MRs), reflecting the full lineage and relationships.
+
+This structure makes it easy to visualize and navigate the relationships between claims, composite resources, and managed resources in your Crossplane environment.
+
+## Example: Tree View, YAML Editing, and Watch Log
+
+The following demo shows how you can browse resources, edit YAML, and watch pod logs in Crossplane Explorer:
+
+![Crossplane Explorer: YAML editing and watch log](resources/screenshots/demo.gif)
+
 ## Viewing and Editing Resources
 
 - **Single-click** any resource to open its YAML in **read-only mode**. This view includes the full resource, including the `status` field, and is clearly marked with a banner at the top:
@@ -24,12 +40,6 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
   ```
 - Only one tab per resource is open at a time—switching between view and edit will close the other mode's tab automatically.
 
-## Example: Tree View and YAML Editing
-
-Below is an example of the Crossplane Explorer tree view and editing a resource's YAML:
-
-![Crossplane Explorer tree view and YAML editing](resources/screenshots/edit-option.gif)
-
 ## Logs: View and Watch Pod Logs
 
 You can now view and watch logs for Crossplane, provider, and function pods directly from the explorer:
@@ -37,10 +47,6 @@ You can now view and watch logs for Crossplane, provider, and function pods dire
 - Expand the **logs** section to see Crossplane, provider, and function pods.
 - **Single-click** a pod to view its YAML in read-only mode.
 - **Right-click** a pod and select **Watch Log** to stream its logs (`kubectl logs -f ...`) in a VSCode output channel.
-
-Below is an example of the logs feature in action:
-
-![Logs feature in action](resources/screenshots/logs-feature.gif)
 
 ## Performance & Safety: Exclude Core CRDs
 
