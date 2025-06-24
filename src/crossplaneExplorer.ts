@@ -139,40 +139,75 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
         }
         
         if (element.label === 'object-mapping') {
-            // List only top-level composites: those with spec.claimRef set
+            // Group by claim: show claims at root, each with its top-level XR(s) as children
             try {
                 const { stdout } = await executeCommand('kubectl', [
                     'get', 'composite', '-o', 'json'
                 ]);
                 const result = JSON.parse(stdout);
                 if (!result.items || result.items.length === 0) return [];
-                return result.items
-                    .filter((item: any) => item.spec && item.spec.claimRef && item.spec.claimRef.name)
-                    .map((item: any) => {
-                        const name = item.metadata.name || '';
-                        const kind = item.kind || '';
-                        const apiVersion = item.apiVersion || '';
-                        const group = apiVersion.split('/')[0] || '';
-                        const resourceType = group ? `${kind.toLowerCase()}.${group}` : kind.toLowerCase();
-                        const label = `[XR] | ${kind} | ${name}`;
-                        return new CrossplaneResource(
-                            label,
-                            vscode.TreeItemCollapsibleState.Collapsed,
-                            resourceType,
-                            name,
-                            '' // composites are cluster-scoped
-                        );
-                    });
+
+                // Group composites by claimRef
+                const claimsMap = new Map<string, { claimRef: any, composites: any[] }>();
+                for (const item of result.items) {
+                    const claimRef = item.spec?.claimRef;
+                    if (claimRef && claimRef.name && claimRef.kind && claimRef.namespace) {
+                        const claimKey = `${claimRef.kind}|${claimRef.name}|${claimRef.namespace}`;
+                        if (!claimsMap.has(claimKey)) {
+                            claimsMap.set(claimKey, { claimRef, composites: [] });
+                        }
+                        claimsMap.get(claimKey)!.composites.push(item);
+                    }
+                }
+
+                // Create claim nodes at the root
+                return Array.from(claimsMap.values()).map(({ claimRef, composites }) => {
+                    const claimLabel = `[claim] | ${claimRef.kind} | ${claimRef.name} | ${claimRef.namespace}`;
+                    const claimNode = new CrossplaneResource(
+                        claimLabel,
+                        vscode.TreeItemCollapsibleState.Collapsed,
+                        'object-mapping-claim',
+                        claimRef.name,
+                        claimRef.namespace
+                    );
+                    (claimNode as any)._claimKind = claimRef.kind;
+                    (claimNode as any)._claimApiVersion = claimRef.apiVersion || '';
+                    (claimNode as any)._childComposites = composites;
+                    return claimNode;
+                });
             } catch (err: any) {
                 vscode.window.showErrorMessage(`Error fetching composites: ${err.message}`);
                 return [];
             }
         }
-        
-        // Komoplane-style composite expansion logic (full replacement)
+        if (element.resourceType === 'object-mapping-claim') {
+            // Show all top-level XRs for this claim
+            const composites = (element as any)._childComposites || [];
+            return composites.map((composite: any) => {
+                const name = composite.metadata.name || '';
+                const kind = composite.kind || '';
+                const apiVersion = composite.apiVersion || '';
+                const group = apiVersion.split('/')[0] || '';
+                const resourceType = group ? `${kind.toLowerCase()}.${group}` : kind.toLowerCase();
+                const label = `[XR] | ${kind} | ${name}`;
+                const node = new CrossplaneResource(
+                    label,
+                    vscode.TreeItemCollapsibleState.Collapsed,
+                    resourceType,
+                    name,
+                    '' // composites are cluster-scoped
+                );
+                node.command = {
+                    command: 'crossplane-explorer.viewResource',
+                    title: 'View Resource YAML',
+                    arguments: [node]
+                };
+                return node;
+            });
+        }
+        // Komoplane-style composite expansion logic (for XR children)
         if (element.resourceType && (element.resourceType.startsWith('x') || element.resourceType.startsWith('composite'))) {
             try {
-                // Fetch the composite resource (cluster-scoped, omit namespace)
                 const { stdout } = await executeCommand('kubectl', [
                     'get', element.resourceType, (element.resourceName ? element.resourceName : ''), '-o', 'json'
                 ]);
@@ -185,13 +220,19 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     const label = isComposite
                         ? `[XR] | ${ref.kind} | ${ref.name}`
                         : `[MR] | ${ref.kind} | ${ref.name}`;
-                    return new CrossplaneResource(
+                    const resource = new CrossplaneResource(
                         label,
                         isComposite ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
                         resourceType,
                         (ref.name ? ref.name : ''),
-                        isComposite ? '' : (ref.namespace ? ref.namespace : '') // always pass a string
+                        isComposite ? '' : (ref.namespace ? ref.namespace : '')
                     );
+                    resource.command = {
+                        command: 'crossplane-explorer.viewResource',
+                        title: 'View Resource YAML',
+                        arguments: [resource]
+                    };
+                    return resource;
                 });
             } catch (err: any) {
                 vscode.window.showErrorMessage(`Error fetching composite children: ${err.message}`);
