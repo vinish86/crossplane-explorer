@@ -30,6 +30,18 @@ Below is an example of the Crossplane Explorer tree view and editing a resource'
 
 ![Crossplane Explorer tree view and YAML editing](resources/screenshots/edit-option.gif)
 
+## Logs: View and Watch Pod Logs
+
+You can now view and watch logs for Crossplane, provider, and function pods directly from the explorer:
+
+- Expand the **logs** section to see Crossplane, provider, and function pods.
+- **Single-click** a pod to view its YAML in read-only mode.
+- **Right-click** a pod and select **Watch Log** to stream its logs (`kubectl logs -f ...`) in a VSCode output channel.
+
+Below is an example of the logs feature in action:
+
+![Logs feature in action](resources/screenshots/logs-feature.gif)
+
 ## Performance & Safety: Exclude Core CRDs
 
 To improve performance and reduce clutter, the extension allows you to exclude CRDs whose names end with certain suffixes (such as `crossplane.io`, `upbound.io`, `cattle.io`). This also helps prevent accidental editing of critical Crossplane, Upbound, or Rancher (cattle) CRDs.
