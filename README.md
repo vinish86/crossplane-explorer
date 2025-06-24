@@ -89,7 +89,7 @@ By default, these suffixes are excluded. You can customize this list to fit your
 
 ## Release Notes
 
-### 0.0.1
+### 0.0.21
 - Initial release: resource browsing, YAML editing, status display, and more.
 
 ---
