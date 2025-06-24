@@ -138,6 +138,67 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
             return Promise.resolve([]);
         }
         
+        if (element.label === 'object-mapping') {
+            // List only top-level composites: those with spec.claimRef set
+            try {
+                const { stdout } = await executeCommand('kubectl', [
+                    'get', 'composite', '-o', 'json'
+                ]);
+                const result = JSON.parse(stdout);
+                if (!result.items || result.items.length === 0) return [];
+                return result.items
+                    .filter((item: any) => item.spec && item.spec.claimRef && item.spec.claimRef.name)
+                    .map((item: any) => {
+                        const name = item.metadata.name || '';
+                        const kind = item.kind || '';
+                        const apiVersion = item.apiVersion || '';
+                        const group = apiVersion.split('/')[0] || '';
+                        const resourceType = group ? `${kind.toLowerCase()}.${group}` : kind.toLowerCase();
+                        const label = `[XR] | ${kind} | ${name}`;
+                        return new CrossplaneResource(
+                            label,
+                            vscode.TreeItemCollapsibleState.Collapsed,
+                            resourceType,
+                            name,
+                            '' // composites are cluster-scoped
+                        );
+                    });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching composites: ${err.message}`);
+                return [];
+            }
+        }
+        
+        // Komoplane-style composite expansion logic (full replacement)
+        if (element.resourceType && (element.resourceType.startsWith('x') || element.resourceType.startsWith('composite'))) {
+            try {
+                // Fetch the composite resource (cluster-scoped, omit namespace)
+                const { stdout } = await executeCommand('kubectl', [
+                    'get', element.resourceType, (element.resourceName ? element.resourceName : ''), '-o', 'json'
+                ]);
+                const composite = JSON.parse(stdout);
+                const resourceRefs = composite.spec?.resourceRefs || [];
+                return resourceRefs.map((ref: any) => {
+                    const isComposite = ref.kind && ref.kind.startsWith('X');
+                    const group = (ref.apiVersion || '').split('/')[0];
+                    const resourceType = group ? `${ref.kind.toLowerCase()}.${group}` : ref.kind.toLowerCase();
+                    const label = isComposite
+                        ? `[XR] | ${ref.kind} | ${ref.name}`
+                        : `[MR] | ${ref.kind} | ${ref.name}`;
+                    return new CrossplaneResource(
+                        label,
+                        isComposite ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
+                        resourceType,
+                        (ref.name ? ref.name : ''),
+                        isComposite ? '' : (ref.namespace ? ref.namespace : '') // always pass a string
+                    );
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching composite children: ${err.message}`);
+                return [];
+            }
+        }
+        
         try {
             const resourceType = element.label;
             let args = ['get', resourceType, '-o', 'json'];
@@ -226,7 +287,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
     }
 
     private getRootItems(): CrossplaneResource[] {
-        const itemLabels = ['managed', 'composite', 'compositions', 'claim', 'crds', 'providers', 'functions', 'logs'];
+        const itemLabels = ['managed', 'composite', 'compositions', 'claim', 'crds', 'providers', 'functions', 'logs', 'object-mapping'];
         return itemLabels.map(label => new CrossplaneResource(label, vscode.TreeItemCollapsibleState.Collapsed));
     }
 }
