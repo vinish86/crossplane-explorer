@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { exec } from 'child_process';
 
 const resourceToTempFileMap = new Map<string, string>();
 const tempFileToResourceMap = new Map<string, string>();
@@ -399,6 +400,52 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 		context.subscriptions.push(disposable);
 	}));
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplane-explorer.cbtTrace', async (resource: any) => {
+			if (!resource.resourceType || !resource.resourceName) {
+				vscode.window.showErrorMessage('CBT: Resource type or name missing.');
+				return;
+			}
+
+			// Compose the command
+			const cmd = `crossplane beta trace ${resource.resourceType} ${resource.resourceName}`;
+
+			const output = vscode.window.createOutputChannel('Crossplane CBT');
+			output.show(true);
+			output.appendLine(`# ${cmd}\n`);
+
+			function pad(str: string, len: number) {
+				return (str + ' '.repeat(len)).slice(0, len);
+			}
+
+			require('child_process').exec(cmd, { maxBuffer: 1024 * 1024 }, (err: any, stdout: string, stderr: string) => {
+				if (err) {
+					output.appendLine(`Error: ${err.message}`);
+					return;
+				}
+				if (stderr) {
+					output.appendLine(stderr);
+				}
+				// Try to parse as JSON, else show as plain text
+				try {
+					const result = JSON.parse(stdout);
+					const obj = result.object;
+					const name = `${obj.kind}/${obj.metadata.name}`;
+					const synced = obj.status?.conditions?.find((c: any) => c.type === 'Synced')?.status || '-';
+					const ready = obj.status?.conditions?.find((c: any) => c.type === 'Ready')?.status || '-';
+					const statusMsg = obj.status?.conditions?.find((c: any) => c.type === 'Synced')?.message || '-';
+					output.appendLine('┌───────────────────────────────┬────────┬───────┬─────────────────────────────────────────────┐');
+					output.appendLine('│ NAME                          │ SYNCED │ READY │ STATUS                                      │');
+					output.appendLine('├───────────────────────────────┼────────┼───────┼─────────────────────────────────────────────┤');
+					output.appendLine(`│ ${pad(name, 28)} │ ${pad(synced, 6)} │ ${pad(ready, 5)} │ ${pad(statusMsg, 41)} │`);
+					output.appendLine('└───────────────────────────────┴────────┴───────┴─────────────────────────────────────────────┘');
+				} catch {
+					output.appendLine(stdout);
+				}
+			});
+		})
+	);
 }
 
 // This method is called when your extension is deactivated

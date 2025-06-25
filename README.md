@@ -9,6 +9,7 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 - **Status at a Glance**: See resource health and sync status right in the explorer.
 - **One-Click Refresh**: Instantly refresh the resource list with the refresh button.
 - **Beautiful Icons**: Each resource type has a clear, modern icon for easy navigation.
+- **CBT/Trace on XR**: Right-click any XR (composite resource) under deployment-flow and select **CBT** to run `crossplane beta trace` and view XR status in a tabular format in the Output panel.
 
 ## Deployment Tree Structure: claim > XR > MR
 
@@ -75,6 +76,7 @@ By default, these suffixes are excluded. You can customize this list to fit your
 - [VS Code](https://code.visualstudio.com/)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) installed and configured to access your Kubernetes cluster
 - [Crossplane](https://crossplane.io/) installed in your cluster
+- [Crossplane CLI](https://docs.crossplane.io/latest/getting-started/cli/) installed (required for CBT/trace feature)
 
 ## Usage
 
@@ -89,7 +91,7 @@ By default, these suffixes are excluded. You can customize this list to fit your
 
 ## Release Notes
 
-### 0.0.21
+### 0.0.23
 - Initial release: resource browsing, YAML editing, status display, and more.
 
 ---

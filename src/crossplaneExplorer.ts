@@ -255,6 +255,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     name,
                     '' // composites are cluster-scoped
                 );
+                node.contextValue = 'composite-xr';
                 node.command = {
                     command: 'crossplane-explorer.viewResource',
                     title: 'View Resource YAML',
