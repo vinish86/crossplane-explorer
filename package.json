@@ -42,6 +42,10 @@
       {
         "command": "crossplane-explorer.cbtTrace",
         "title": "CBT: Crossplane Beta Trace"
+      },
+      {
+        "command": "crossplaneExplorer.showLiveDiff",
+        "title": "Field Watch"
       }
     ],
     "viewsContainers": {
@@ -84,6 +88,11 @@
           "command": "crossplane-explorer.cbtTrace",
           "when": "view == crossplaneExplorer && viewItem == composite-xr",
           "group": "navigation"
+        },
+        {
+          "command": "crossplaneExplorer.showLiveDiff",
+          "when": "view == crossplaneExplorer && viewItem != logs-provider-pod",
+          "group": "navigation"
         }
       ]
     },
@@ -93,7 +102,11 @@
       "properties": {
         "crossplaneExplorer.excludeCrdSuffixes": {
           "type": "array",
-          "default": ["crossplane.io", "upbound.io", "cattle.io"],
+          "default": [
+            "crossplane.io",
+            "upbound.io",
+            "cattle.io"
+          ],
           "description": "CRD suffixes to exclude from the CRD list."
         }
       }
@@ -108,19 +121,23 @@
     "test": "vscode-test"
   },
   "dependencies": {
+    "deep-diff": "^1.0.2",
+    "diff": "^8.0.2",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
+    "@types/deep-diff": "^1.0.5",
+    "@types/diff": "^7.0.2",
     "@types/js-yaml": "^4.0.9",
-    "@types/vscode": "^1.101.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
+    "@types/vscode": "^1.101.0",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
     "@typescript-eslint/parser": "^8.31.1",
-    "eslint": "^9.25.1",
-    "typescript": "^5.8.3",
     "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.25.1",
+    "typescript": "^5.8.3"
   },
   "repository": {
     "type": "git",

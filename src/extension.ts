@@ -8,6 +8,10 @@ import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { exec } from 'child_process';
+import * as Diff from 'diff'; // TODO: npm install diff
+import type { Change } from 'diff';
+import { createTwoFilesPatch } from 'diff';
+import { diff as deepDiff, Diff as DeepDiff } from 'deep-diff';
 
 const resourceToTempFileMap = new Map<string, string>();
 const tempFileToResourceMap = new Map<string, string>();
@@ -446,6 +450,80 @@ export function activate(context: vscode.ExtensionContext) {
 			});
 		})
 	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.showLiveDiff', async (resource: CrossplaneResource) => {
+			if (!resource.resourceType || !resource.resourceName) {
+				vscode.window.showErrorMessage('Cannot show live diff: resource name or type is missing.');
+				return;
+			}
+			const output = vscode.window.createOutputChannel(`Live Diff: ${resource.resourceName}`);
+			output.show(true);
+			output.appendLine(`# Live diff for ${resource.resourceType} ${resource.resourceName}${resource.namespace ? ' -n ' + resource.namespace : ''}\n`);
+
+			let lastYaml: string | undefined = undefined;
+			const args = ['get', resource.resourceType, resource.resourceName];
+			if (resource.namespace) args.push('-n', resource.namespace);
+			args.push('-o', 'yaml', '--watch');
+
+			const child = require('child_process').spawn('kubectl', args);
+			let buffer = '';
+			child.stdout.on('data', (data: Buffer) => {
+				buffer += data.toString();
+				// Try to split on document boundaries (---)
+				let docs = buffer.split(/^---$/m);
+				if (docs.length > 1) {
+					for (let i = 0; i < docs.length - 1; i++) {
+						const newYaml = docs[i].trim();
+						if (newYaml) {
+							if (lastYaml === undefined) {
+								lastYaml = newYaml; // First event: set baseline, no diff
+							} else {
+								showDiff(lastYaml, newYaml, output);
+								lastYaml = newYaml;
+							}
+						}
+					}
+					buffer = docs[docs.length - 1];
+				}
+			});
+			child.stderr.on('data', (data: Buffer) => {
+				output.appendLine(`\u001b[31m${data.toString()}\u001b[0m`);
+			});
+			child.on('close', (code: number) => {
+				output.appendLine(`\n[Process exited with code ${code}]`);
+			});
+			// Dispose watcher when Output Channel is closed
+			const disposable = vscode.Disposable.from({
+				dispose: () => {
+					child.kill();
+				}
+			});
+			context.subscriptions.push(disposable);
+		})
+	);
+
+	function showDiff(oldStr: string, newStr: string, output: vscode.OutputChannel) {
+		const oldObj = yaml.load(oldStr) || {};
+		const newObj = yaml.load(newStr) || {};
+		const differences: DeepDiff<any, any>[] | undefined = deepDiff(oldObj, newObj);
+
+		if (!differences || differences.length === 0) {
+			output.appendLine(`[${new Date().toLocaleTimeString()}] No change`);
+			return;
+		}
+
+		differences.forEach(change => {
+			const path = change.path?.join('.') || '';
+			if (change.kind === 'E') {
+				output.appendLine(`~ ${path}: ${JSON.stringify(change.lhs)} → ${JSON.stringify(change.rhs)}`);
+			} else if (change.kind === 'N') {
+				output.appendLine(`+ ${path}: ${JSON.stringify(change.rhs)}`);
+			} else if (change.kind === 'D') {
+				output.appendLine(`- ${path}: ${JSON.stringify(change.lhs)}`);
+			}
+		});
+	}
 }
 
 // This method is called when your extension is deactivated
