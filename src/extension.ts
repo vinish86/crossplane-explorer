@@ -453,53 +453,78 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('crossplaneExplorer.showLiveDiff', async (resource: CrossplaneResource) => {
-			if (!resource.resourceType || !resource.resourceName) {
-				vscode.window.showErrorMessage('Cannot show live diff: resource name or type is missing.');
+			const output = vscode.window.createOutputChannel(`Field Watch: ${resource.resourceName}`);
+			output.show(true);
+			output.appendLine(`# Field Watch for ${resource.resourceType} ${resource.resourceName}${resource.namespace ? ' -n ' + resource.namespace : ''}\n`);
+
+			if (!resource.resourceType) {
+				output.appendLine('[ERROR] Resource type is missing.');
 				return;
 			}
-			const output = vscode.window.createOutputChannel(`Live Diff: ${resource.resourceName}`);
-			output.show(true);
-			output.appendLine(`# Live diff for ${resource.resourceType} ${resource.resourceName}${resource.namespace ? ' -n ' + resource.namespace : ''}\n`);
 
-			let lastYaml: string | undefined = undefined;
-			const args = ['get', resource.resourceType, resource.resourceName];
-			if (resource.namespace) args.push('-n', resource.namespace);
-			args.push('-o', 'yaml', '--watch');
+			const k8sModule = await import('@kubernetes/client-node');
+			const kc = new k8sModule.KubeConfig();
+			kc.loadFromDefault();
+			const watch = new k8sModule.Watch(kc);
 
-			const child = require('child_process').spawn('kubectl', args);
-			let buffer = '';
-			child.stdout.on('data', (data: Buffer) => {
-				buffer += data.toString();
-				// Try to split on document boundaries (---)
-				let docs = buffer.split(/^---$/m);
-				if (docs.length > 1) {
-					for (let i = 0; i < docs.length - 1; i++) {
-						const newYaml = docs[i].trim();
-						if (newYaml) {
-							if (lastYaml === undefined) {
-								lastYaml = newYaml; // First event: set baseline, no diff
-							} else {
-								showDiff(lastYaml, newYaml, output);
-								lastYaml = newYaml;
-							}
-						}
+			let prevObj: any = undefined;
+			let typeParts = resource.resourceType.split('.');
+			let kind = typeParts[0];
+			let group = typeParts.slice(1).join('.');
+			let version = 'v1beta1';
+			let plural = kind.endsWith('s') ? kind + 'es' : kind + 's';
+			if (kind.endsWith('es')) plural = kind;
+			let path: string;
+			if (resource.namespace) {
+				path = `/apis/${group}/${version}/namespaces/${resource.namespace}/${plural}`;
+			} else {
+				path = `/apis/${group}/${version}/${plural}`;
+			}
+			const fieldSelector = `metadata.name=${resource.resourceName}`;
+
+			// Utility to clean noisy fields from K8s objects before diffing
+			function cleanK8sObject(obj: any): any {
+				if (!obj) return obj;
+				const copy = JSON.parse(JSON.stringify(obj));
+				if (copy.metadata) {
+					delete copy.metadata.managedFields;
+					delete copy.metadata.resourceVersion;
+					delete copy.metadata.creationTimestamp;
+					delete copy.metadata.generation;
+					delete copy.metadata.uid;
+				}
+				if (copy.status) {
+					delete copy.status.conditions;
+				}
+				return copy;
+			}
+
+			watch.watch(
+				path,
+				{ fieldSelector },
+				(type, obj) => {
+					const cleanedObj = cleanK8sObject(obj);
+					const resourceVersion = obj?.metadata?.resourceVersion || '-';
+					output.appendLine(`# [${type}] event (resourceVersion: ${resourceVersion})`);
+					if (type === 'ADDED') {
+						output.appendLine('# Baseline diff (initial state):');
+						showDiff('{}', JSON.stringify(cleanedObj), output);
+						prevObj = cleanedObj;
+					} else if (type === 'MODIFIED') {
+						showDiff(JSON.stringify(prevObj), JSON.stringify(cleanedObj), output);
+						prevObj = cleanedObj;
+					} else if (type === 'DELETED') {
+						output.appendLine(`# Resource deleted`);
+						showDiff(JSON.stringify(prevObj), '{}', output);
+						prevObj = undefined;
 					}
-					buffer = docs[docs.length - 1];
+				},
+				(err) => {
+					if (err) {
+						output.appendLine(`[ERROR] Watch error: ${err}`);
+					}
 				}
-			});
-			child.stderr.on('data', (data: Buffer) => {
-				output.appendLine(`\u001b[31m${data.toString()}\u001b[0m`);
-			});
-			child.on('close', (code: number) => {
-				output.appendLine(`\n[Process exited with code ${code}]`);
-			});
-			// Dispose watcher when Output Channel is closed
-			const disposable = vscode.Disposable.from({
-				dispose: () => {
-					child.kill();
-				}
-			});
-			context.subscriptions.push(disposable);
+			);
 		})
 	);
 
