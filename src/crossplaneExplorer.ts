@@ -305,6 +305,74 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
             }
         }
         
+        if (element.label === 'configurations') {
+            try {
+                const { stdout } = await executeCommand('kubectl', [
+                    'get', 'configurations.pkg.crossplane.io', '-o', 'json'
+                ]);
+                const result = JSON.parse(stdout);
+                if (!result.items || result.items.length === 0) {
+                    return [];
+                }
+                return result.items.map((item: any) => {
+                    const name = item.metadata.name;
+                    const namespace = item.metadata.namespace;
+                    const label = `${name}${namespace ? ' (' + namespace + ')' : ''}`;
+                    const node = new CrossplaneResource(
+                        label,
+                        vscode.TreeItemCollapsibleState.None,
+                        'configurations.pkg.crossplane.io',
+                        name,
+                        namespace
+                    );
+                    node.command = {
+                        command: 'crossplane-explorer.viewResource',
+                        title: 'View Resource YAML',
+                        arguments: [node]
+                    };
+                    node.contextValue = 'configuration';
+                    return node;
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching configurations: ${err.message}`);
+                return [];
+            }
+        }
+        
+        if (element.label === 'deploymentruntimeconfigs') {
+            try {
+                const { stdout } = await executeCommand('kubectl', [
+                    'get', 'deploymentruntimeconfigs.pkg.crossplane.io', '-o', 'json'
+                ]);
+                const result = JSON.parse(stdout);
+                if (!result.items || result.items.length === 0) {
+                    return [];
+                }
+                return result.items.map((item: any) => {
+                    const name = item.metadata.name;
+                    const namespace = item.metadata.namespace;
+                    const label = `${name}${namespace ? ' (' + namespace + ')' : ''}`;
+                    const node = new CrossplaneResource(
+                        label,
+                        vscode.TreeItemCollapsibleState.None,
+                        'deploymentruntimeconfigs.pkg.crossplane.io',
+                        name,
+                        namespace
+                    );
+                    node.command = {
+                        command: 'crossplane-explorer.viewResource',
+                        title: 'View Resource YAML',
+                        arguments: [node]
+                    };
+                    node.contextValue = 'deploymentruntimeconfig';
+                    return node;
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching deploymentruntimeconfigs: ${err.message}`);
+                return [];
+            }
+        }
+        
         try {
             const resourceType = element.label;
             let args = ['get', resourceType, '-o', 'json'];
@@ -393,7 +461,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
     }
 
     private getRootItems(): CrossplaneResource[] {
-        const itemLabels = ['compositions', 'crds', 'providers', 'functions', 'logs', 'deployment-flow'];
+        const itemLabels = ['compositions', 'configurations', 'deploymentruntimeconfigs', 'crds', 'providers', 'functions', 'logs', 'deployment-flow'];
         return itemLabels.map(label => new CrossplaneResource(label, vscode.TreeItemCollapsibleState.Collapsed));
     }
 }
@@ -426,11 +494,14 @@ export class CrossplaneResource extends vscode.TreeItem {
                 case 'compositions':
                     this.iconPath = new vscode.ThemeIcon('library');
                     break;
-                case 'claim':
-                    this.iconPath = new vscode.ThemeIcon('notebook');
+                case 'configurations':
+                    this.iconPath = new vscode.ThemeIcon('gear');
+                    break;
+                case 'deploymentruntimeconfigs':
+                    this.iconPath = new vscode.ThemeIcon('settings-editor-label-icon');
                     break;
                 case 'crds':
-                    this.iconPath = new vscode.ThemeIcon('library');
+                    this.iconPath = new vscode.ThemeIcon('symbol-structure');
                     break;
                 case 'providers':
                     this.iconPath = new vscode.ThemeIcon('plug');
