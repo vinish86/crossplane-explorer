@@ -37,7 +37,13 @@
       },
       {
         "command": "crossplane-explorer.tailPodLogs",
-        "title": "Watch Log"
+        "title": "Start Watch Log",
+        "icon": "$(play)"
+      },
+      {
+        "command": "crossplane-explorer.stopPodLog",
+        "title": "Stop Watch Log",
+        "icon": "$(debug-stop)"
       },
       {
         "command": "crossplane-explorer.cbtTrace",
@@ -94,7 +100,12 @@
         {
           "command": "crossplane-explorer.tailPodLogs",
           "when": "view == crossplaneExplorer && viewItem == logs-provider-pod",
-          "group": "navigation"
+          "group": "inline"
+        },
+        {
+          "command": "crossplane-explorer.stopPodLog",
+          "when": "view == crossplaneExplorer && viewItem == logs-provider-pod",
+          "group": "inline"
         },
         {
           "command": "crossplane-explorer.cbtTrace",

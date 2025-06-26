@@ -54,10 +54,16 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                 const pods = stdout.split('\n').filter(line => line.trim().length > 0);
                 return pods.map(line => {
                     const [namespace, name] = line.split(/\s+/);
-                    const label = `${name} (${namespace})`;
+                    const maxLabelLength = 24;
+                    let displayName = name;
+                    if (name.length > maxLabelLength) {
+                        displayName = name.slice(0, maxLabelLength - 3) + '...';
+                    }
+                    const label = `${displayName} (${namespace})`;
                     const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, 'logs-provider-pod', name, namespace);
                     resource.iconPath = new vscode.ThemeIcon('package');
                     resource.contextValue = 'logs-provider-pod';
+                    resource.tooltip = `${name} (${namespace})`;
                     resource.command = {
                         command: 'crossplane-explorer.showPodDetails',
                         title: 'Show Pod Details',
@@ -86,10 +92,16 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                 const pods = stdout.split('\n').filter(line => line.trim().length > 0);
                 return pods.map(line => {
                     const [namespace, name] = line.split(/\s+/);
-                    const label = `${name} (${namespace})`;
+                    const maxLabelLength = 24;
+                    let displayName = name;
+                    if (name.length > maxLabelLength) {
+                        displayName = name.slice(0, maxLabelLength - 3) + '...';
+                    }
+                    const label = `${displayName} (${namespace})`;
                     const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, 'logs-function-pod', name, namespace);
                     resource.iconPath = new vscode.ThemeIcon('package');
                     resource.contextValue = 'logs-provider-pod';
+                    resource.tooltip = `${name} (${namespace})`;
                     resource.command = {
                         command: 'crossplane-explorer.showPodDetails',
                         title: 'Show Pod Details',
@@ -118,10 +130,16 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                 const pods = stdout.split('\n').filter(line => line.trim().length > 0);
                 return pods.map(line => {
                     const [namespace, name] = line.split(/\s+/);
-                    const label = `${name} (${namespace})`;
+                    const maxLabelLength = 24;
+                    let displayName = name;
+                    if (name.length > maxLabelLength) {
+                        displayName = name.slice(0, maxLabelLength - 3) + '...';
+                    }
+                    const label = `${displayName} (${namespace})`;
                     const resource = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, 'logs-crossplane-pod', name, namespace);
                     resource.iconPath = new vscode.ThemeIcon('package');
                     resource.contextValue = 'logs-provider-pod';
+                    resource.tooltip = `${name} (${namespace})`;
                     resource.command = {
                         command: 'crossplane-explorer.showPodDetails',
                         title: 'Show Pod Details',
