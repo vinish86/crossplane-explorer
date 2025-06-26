@@ -22,6 +22,7 @@ const logProcessMap = new WeakMap<vscode.OutputChannel, any>();
 
 // Add at the top:
 const fieldWatchMap = new Map<string, () => void>();
+const fieldWatchOutputMap = new Map<string, vscode.OutputChannel>();
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -456,15 +457,17 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('crossplaneExplorer.showLiveDiff', async (resource: CrossplaneResource) => {
+			const resourceKey = `${resource.resourceType}:${resource.namespace || ''}:${resource.resourceName}`;
+			if (fieldWatchOutputMap.has(resourceKey)) {
+				const existingOutput = fieldWatchOutputMap.get(resourceKey)!;
+				existingOutput.show(true);
+				existingOutput.appendLine('[INFO] Field Watch is already running for this resource.');
+				return;
+			}
 			const output = vscode.window.createOutputChannel(`Field Watch: ${resource.resourceName}`);
 			output.show(true);
 			output.appendLine(`# Field Watch for ${resource.resourceType} ${resource.resourceName}${resource.namespace ? ' -n ' + resource.namespace : ''}\n`);
-
-			const resourceKey = `${resource.resourceType}:${resource.namespace || ''}:${resource.resourceName}`;
-			if (fieldWatchMap.has(resourceKey)) {
-				output.appendLine('[INFO] Field Watch is already running for this resource.');
-				return;
-			}
+			fieldWatchOutputMap.set(resourceKey, output);
 
 			if (!resource.resourceType) {
 				output.appendLine('[ERROR] Resource type is missing.');
@@ -577,6 +580,7 @@ export function activate(context: vscode.ExtensionContext) {
 				req.abort();
 				output.appendLine('[INFO] Field Watch stopped.');
 				fieldWatchMap.delete(resourceKey);
+				fieldWatchOutputMap.delete(resourceKey);
 				output.dispose(); // Close the OutputChannel tab
 			};
 			fieldWatchMap.set(resourceKey, stopWatch);

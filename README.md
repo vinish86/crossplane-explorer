@@ -92,7 +92,7 @@ By default, these suffixes are excluded. You can customize this list to fit your
 
 ## Release Notes
 
-### 0.0.23
+### 0.0.28
 - Initial release: resource browsing, YAML editing, status display, and more.
 
 ### Field Watch Example
