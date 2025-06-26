@@ -24,6 +24,9 @@ const logProcessMap = new WeakMap<vscode.OutputChannel, any>();
 const fieldWatchMap = new Map<string, () => void>();
 const fieldWatchOutputMap = new Map<string, vscode.OutputChannel>();
 
+// Add at the top of the file, after imports:
+const activeLogChannels = new Set<vscode.OutputChannel>();
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -412,8 +415,29 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showErrorMessage('Pod name or namespace missing.');
 			return;
 		}
+		// Prevent duplicate log watches for the same pod
+		let existingChannel: vscode.OutputChannel | undefined = undefined;
+		for (const channel of activeLogChannels) {
+			if (channel.name === `Logs: ${resource.resourceName}`) {
+				existingChannel = channel;
+				break;
+			}
+		}
+		if (existingChannel) {
+			vscode.window.showErrorMessage('A log watch for this pod is already open. Please stop the existing log watch before starting a new one.');
+			existingChannel.show(true);
+			return;
+		}
 		const outputChannel = vscode.window.createOutputChannel(`Logs: ${resource.resourceName}`);
+		// Monkey-patch dispose to always clean up activeLogChannels
+		const origDispose = outputChannel.dispose.bind(outputChannel);
+		outputChannel.dispose = () => {
+			activeLogChannels.delete(outputChannel);
+			return origDispose();
+		};
+		activeLogChannels.add(outputChannel);
 		outputChannel.show(true);
+		outputChannel.appendLine('[INFO] Log stream started for this pod.');
 		outputChannel.appendLine(`# kubectl logs -f ${resource.resourceName} -n ${resource.namespace}`);
 		const cp = require('child_process');
 		const logProcess = cp.spawn('kubectl', [
@@ -429,14 +453,17 @@ export function activate(context: vscode.ExtensionContext) {
 			outputChannel.appendLine(`\n[Process exited with code ${code}]`);
 		});
 		logProcessMap.set(outputChannel, logProcess);
-		// Dispose log process when output channel is closed
+		const podName = resource.resourceName;
 		const disposable = vscode.Disposable.from({
 			dispose: () => {
+				console.log(`[DEBUG] OutputChannel dispose called for pod: ${podName}`);
+				outputChannel.appendLine('[INFO] Log stream stopped for this pod.');
 				const proc = logProcessMap.get(outputChannel);
 				if (proc) {
 					proc.kill();
 					logProcessMap.delete(outputChannel);
 				}
+				activeLogChannels.delete(outputChannel);
 			}
 		});
 		context.subscriptions.push(disposable);
@@ -747,6 +774,25 @@ export function activate(context: vscode.ExtensionContext) {
 				vscode.window.showInformationMessage(`Resumed ${resource.resourceType} ${resource.resourceName}`);
 			} catch (err: any) {
 				vscode.window.showErrorMessage(`Failed to resume resource: ${err.message}`);
+			}
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplane-explorer.stopPodLog', async (resource: CrossplaneResource) => {
+			let targetChannel: vscode.OutputChannel | undefined = undefined;
+			for (const channel of activeLogChannels) {
+				if (channel.name === `Logs: ${resource.resourceName}`) {
+					targetChannel = channel;
+					break;
+				}
+			}
+			if (targetChannel) {
+				console.log(`[DEBUG] Stop button clicked for pod: ${resource.resourceName}`);
+				targetChannel.appendLine('[DEBUG] Stop button clicked. Disposing OutputChannel...');
+				targetChannel.dispose();
+			} else {
+				vscode.window.showInformationMessage('No active log watch for this pod.');
 			}
 		})
 	);
