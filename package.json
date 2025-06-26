@@ -4,7 +4,7 @@
   "displayName": "Crossplane Explorer",
   "icon": "resources/icon/icon.png",
   "description": "A Visual Studio Code extension for browsing, editing, and managing Crossplane resources in your Kubernetes cluster. Features a modern tree view, direct YAML editing, and seamless integration with kubectl.",
-  "version": "0.0.23",
+  "version": "0.0.24",
   "author": "Vinish Soman",
   "engines": {
     "vscode": "^1.101.0"
@@ -91,7 +91,7 @@
         },
         {
           "command": "crossplaneExplorer.showLiveDiff",
-          "when": "view == crossplaneExplorer && viewItem != logs-provider-pod",
+          "when": "view == crossplaneExplorer && (viewItem == composite-xr || viewItem == managed-resource)",
           "group": "navigation"
         }
       ]

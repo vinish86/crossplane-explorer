@@ -473,7 +473,7 @@ export function activate(context: vscode.ExtensionContext) {
 			let group = typeParts.slice(1).join('.');
 			let version = 'v1beta1';
 			let plural = kind.endsWith('s') ? kind + 'es' : kind + 's';
-			if (kind.endsWith('es')) plural = kind;
+			if (kind.endsWith('es')) { plural = kind; }
 			let path: string;
 			if (resource.namespace) {
 				path = `/apis/${group}/${version}/namespaces/${resource.namespace}/${plural}`;
@@ -484,7 +484,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Utility to clean noisy fields from K8s objects before diffing
 			function cleanK8sObject(obj: any): any {
-				if (!obj) return obj;
+				if (!obj) { return obj; }
 				const copy = JSON.parse(JSON.stringify(obj));
 				if (copy.metadata) {
 					delete copy.metadata.managedFields;
@@ -534,19 +534,30 @@ export function activate(context: vscode.ExtensionContext) {
 		const differences: DeepDiff<any, any>[] | undefined = deepDiff(oldObj, newObj);
 
 		if (!differences || differences.length === 0) {
-			output.appendLine(`[${new Date().toLocaleTimeString()}] No change`);
 			return;
 		}
 
+		// Group diffs by top-level path for YAML-like output
 		differences.forEach(change => {
-			const path = change.path?.join('.') || '';
+			const pathArr = change.path || [];
+			if (pathArr.length === 0) { return; }
+			// Indentation: 2 spaces per level
+			const indent = (level: number) => '  '.repeat(level);
+			let line = '';
 			if (change.kind === 'E') {
-				output.appendLine(`~ ${path}: ${JSON.stringify(change.lhs)} → ${JSON.stringify(change.rhs)}`);
+				line = `${indent(pathArr.length - 1)}${pathArr[pathArr.length - 1]}:\n${indent(pathArr.length)}~ ${JSON.stringify(change.lhs)} → ${JSON.stringify(change.rhs)}`;
 			} else if (change.kind === 'N') {
-				output.appendLine(`+ ${path}: ${JSON.stringify(change.rhs)}`);
+				line = `${indent(pathArr.length - 1)}${pathArr[pathArr.length - 1]}:\n${indent(pathArr.length)}+ ${JSON.stringify(change.rhs)}`;
 			} else if (change.kind === 'D') {
-				output.appendLine(`- ${path}: ${JSON.stringify(change.lhs)}`);
+				line = `${indent(pathArr.length - 1)}${pathArr[pathArr.length - 1]}:\n${indent(pathArr.length)}- ${JSON.stringify(change.lhs)}`;
 			}
+			// Print parent paths if this is the first time
+			if (pathArr.length > 1) {
+				for (let i = 0; i < pathArr.length - 1; i++) {
+					output.appendLine(`${indent(i)}${pathArr[i]}:`);
+				}
+			}
+			output.appendLine(line);
 		});
 	}
 }
