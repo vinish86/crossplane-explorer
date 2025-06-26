@@ -10,7 +10,7 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 - **One-Click Refresh**: Instantly refresh the resource list with the refresh button.
 - **Beautiful Icons**: Each resource type has a clear, modern icon for easy navigation.
 - **CBT/Trace on XR**: Right-click any XR (composite resource) under deployment-flow and select **CBT** to run `crossplane beta trace` and view XR status in a tabular format in the Output panel.
-- **Field Watch (Real-Time Diff)**: Right-click any XR or MR under deployment-flow and select **Field Watch** to see real-time, field-level diffs for resource changes. Powered by the Kubernetes JS client, this feature shows a clean, YAML-like diff output for every change, with no off-by-one or noisy metadata. Only meaningful changes are shown, making it easy to track resource evolution live.
+- **Field Watch (Real-Time Diff)**: Right-click any XR or MR under deployment-flow and select **Start Field Watch** to see real-time, field-level diffs for resource changes. You can also select **Stop Field Watch** to stop watching that resource. Both options are always available in the context menu, and you can run multiple Field Watches concurrently. The extension will handle duplicate start/stop requests gracefully. Powered by the Kubernetes JS client, this feature shows a clean, YAML-like diff output for every change, with no off-by-one or noisy metadata. Only meaningful changes are shown, making it easy to track resource evolution live.
 
 ## Deployment Tree Structure: claim > XR > MR
 

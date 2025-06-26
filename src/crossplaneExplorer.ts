@@ -291,6 +291,12 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                         title: 'View Resource YAML',
                         arguments: [resource]
                     };
+                    // Set contextValue for Field Watch menu
+                    if (isComposite) {
+                        resource.contextValue = 'composite-xr';
+                    } else {
+                        resource.contextValue = 'managed-resource';
+                    }
                     return resource;
                 });
             } catch (err: any) {

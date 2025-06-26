@@ -20,6 +20,9 @@ const openingResources = new Set<string>();
 // Map to track output channel to process
 const logProcessMap = new WeakMap<vscode.OutputChannel, any>();
 
+// Add at the top:
+const fieldWatchMap = new Map<string, () => void>();
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -457,6 +460,12 @@ export function activate(context: vscode.ExtensionContext) {
 			output.show(true);
 			output.appendLine(`# Field Watch for ${resource.resourceType} ${resource.resourceName}${resource.namespace ? ' -n ' + resource.namespace : ''}\n`);
 
+			const resourceKey = `${resource.resourceType}:${resource.namespace || ''}:${resource.resourceName}`;
+			if (fieldWatchMap.has(resourceKey)) {
+				output.appendLine('[INFO] Field Watch is already running for this resource.');
+				return;
+			}
+
 			if (!resource.resourceType) {
 				output.appendLine('[ERROR] Resource type is missing.');
 				return;
@@ -465,17 +474,54 @@ export function activate(context: vscode.ExtensionContext) {
 			const k8sModule = await import('@kubernetes/client-node');
 			const kc = new k8sModule.KubeConfig();
 			kc.loadFromDefault();
+			const k8sApi = kc.makeApiClient(k8sModule.ApiextensionsV1Api);
 			const watch = new k8sModule.Watch(kc);
 
-			let prevObj: any = undefined;
-			let typeParts = resource.resourceType.split('.');
-			let kind = typeParts[0];
-			let group = typeParts.slice(1).join('.');
-			let version = 'v1beta1';
-			let plural = kind.endsWith('s') ? kind + 'es' : kind + 's';
-			if (kind.endsWith('es')) { plural = kind; }
+			// Dynamically fetch CRD details
+			let kind = (resource as any).kind || '';
+			let apiVersion = (resource as any).apiVersion || '';
+			let group = '';
+			if (apiVersion && apiVersion.includes('/')) {
+				group = apiVersion.split('/')[0];
+			}
+			if (!kind) {
+				const typeParts = resource.resourceType.split('.');
+				kind = typeParts[0];
+				if (!group) {
+					group = typeParts.slice(1).join('.');
+				}
+			}
+			let crdName = group ? `${kind.toLowerCase()}s.${group}` : `${kind.toLowerCase()}s`;
+			if (!crdName) {
+				output.appendLine(`[ERROR] CRD name could not be determined for resourceType: ${resource.resourceType}`);
+				output.appendLine(`Please check the resource type or list available CRDs with 'kubectl get crd'.`);
+				return;
+			}
+			let plural = '';
+			let version = '';
+			let scope = 'Namespaced';
+			try {
+				const resp = await (k8sApi.readCustomResourceDefinition as any)({ name: crdName });
+				const crd = resp?.body || resp;
+				if (!crd || !crd.spec) {
+					output.appendLine(`[ERROR] CRD fetch for ${crdName} did not return a valid CRD object.`);
+					output.appendLine(`[DEBUG] Response: ${JSON.stringify(resp)}`);
+					return;
+				}
+				plural = crd.spec.names.plural;
+				version = crd.spec.versions.find((v: any) => v.served && v.storage)?.name || crd.spec.versions[0].name;
+				group = crd.spec.group;
+				scope = crd.spec.scope;
+			} catch (err) {
+				output.appendLine(`[ERROR] Could not fetch CRD details for ${crdName}: ${err}`);
+				output.appendLine(`This may mean the CRD does not exist in your cluster or the name is incorrect.`);
+				output.appendLine(`Try running 'kubectl get crd' to see available CRDs.`);
+				return;
+			}
+
+			// Always use CRD's plural, group, and version for the API path
 			let path: string;
-			if (resource.namespace) {
+			if (scope === 'Namespaced' && resource.namespace) {
 				path = `/apis/${group}/${version}/namespaces/${resource.namespace}/${plural}`;
 			} else {
 				path = `/apis/${group}/${version}/${plural}`;
@@ -499,7 +545,9 @@ export function activate(context: vscode.ExtensionContext) {
 				return copy;
 			}
 
-			watch.watch(
+			let prevObj: any = undefined;
+			// Start the watch and store the abort function
+			const req = await watch.watch(
 				path,
 				{ fieldSelector },
 				(type, obj) => {
@@ -520,11 +568,31 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 				},
 				(err) => {
-					if (err) {
+					if (err && err.name !== 'AbortError') {
 						output.appendLine(`[ERROR] Watch error: ${err}`);
 					}
 				}
 			);
+			const stopWatch = () => {
+				req.abort();
+				output.appendLine('[INFO] Field Watch stopped.');
+				fieldWatchMap.delete(resourceKey);
+				output.dispose(); // Close the OutputChannel tab
+			};
+			fieldWatchMap.set(resourceKey, stopWatch);
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.stopFieldWatch', async (resource: CrossplaneResource) => {
+			const resourceKey = `${resource.resourceType}:${resource.namespace || ''}:${resource.resourceName}`;
+			const stopFn = fieldWatchMap.get(resourceKey);
+			if (stopFn) {
+				stopFn();
+			} else {
+				vscode.window.showInformationMessage('No active Field Watch for this resource.');
+				setFieldWatchContext(resourceKey, false);
+			}
 		})
 	);
 
@@ -559,6 +627,11 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 			output.appendLine(line);
 		});
+	}
+
+	// Add helper to set context
+	function setFieldWatchContext(resourceKey: string, active: boolean) {
+		vscode.commands.executeCommand('setContext', `fieldWatchActive:${resourceKey}`, active);
 	}
 }
 
