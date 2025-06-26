@@ -307,10 +307,43 @@ export function activate(context: vscode.ExtensionContext) {
                         vscode.window.showErrorMessage('YAML Error: ' + e.message);
                         return;
                     }
-                    const { stderr } = await executeCommandWithStdin('kubectl', ['apply', '-f', '-', '--server-side', '--force-conflicts'], fileContent);
-                    if (stderr) {
-                        vscode.window.showErrorMessage(`Failed to apply changes: ${stderr}`);
+                    const { stdout, stderr } = await executeCommandWithStdin('kubectl', ['apply', '-f', '-', '--server-side', '--force-conflicts'], fileContent);
+                    if (stderr && (stderr.includes('forbidden') || stderr.toLowerCase().includes('permission'))) {
+                        vscode.window.showErrorMessage(`Permission denied: ${stderr}`);
                         return;
+                    }
+                    // Optionally, verify the change by fetching the resource again
+                    try {
+                        const docObj = yaml.load(fileContent) as any;
+                        const kind = docObj?.kind;
+                        const name = docObj?.metadata?.name;
+                        const namespace = docObj?.metadata?.namespace;
+                        const apiVersion = docObj?.apiVersion;
+                        let group = '';
+                        let version = '';
+                        if (apiVersion && apiVersion.includes('/')) {
+                            [group, version] = apiVersion.split('/');
+                        }
+                        let resourceType = kind ? kind.toLowerCase() : '';
+                        if (group) {
+                            resourceType = `${resourceType}.${group}`;
+                        }
+                        const getArgs = [
+                            'get', resourceType, name, '-o', 'yaml'
+                        ];
+                        if (namespace) {
+                            getArgs.push('-n', namespace);
+                        }
+                        const { stdout: getOut } = await executeCommand('kubectl', getArgs);
+                        const liveObj = yaml.load(getOut) as any;
+                        // Simple check: compare spec blocks
+                        if (docObj?.spec && liveObj?.spec && JSON.stringify(docObj.spec) !== JSON.stringify(liveObj.spec)) {
+                            vscode.window.showWarningMessage('Resource was not updated as expected. You may not have sufficient permissions.');
+                            return;
+                        }
+                    } catch (verifyErr) {
+                        // Ignore verification errors, just warn
+                        vscode.window.showWarningMessage('Could not verify if the resource was updated.');
                     }
                     vscode.window.showInformationMessage(`Successfully applied changes to ${path.basename(filePath)}`);
                     crossplaneExplorerProvider.refresh();
@@ -637,6 +670,86 @@ export function activate(context: vscode.ExtensionContext) {
 	function setFieldWatchContext(resourceKey: string, active: boolean) {
 		vscode.commands.executeCommand('setContext', `fieldWatchActive:${resourceKey}`, active);
 	}
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.pauseResource', async (resource: CrossplaneResource) => {
+			if (!resource.resourceType || !resource.resourceName) {
+				vscode.window.showErrorMessage('Cannot pause resource: resource type or name is missing.');
+				return;
+			}
+			try {
+				const args = [
+					'annotate', resource.resourceType, resource.resourceName,
+					'crossplane.io/paused=true', '--overwrite'
+				];
+				if (resource.namespace) {
+					args.push('-n', resource.namespace);
+				}
+				const { stderr } = await executeCommand('kubectl', args);
+				if (stderr && (stderr.includes('forbidden') || stderr.toLowerCase().includes('permission'))) {
+					vscode.window.showErrorMessage(`Permission denied: ${stderr}`);
+					return;
+				}
+				// Verify annotation
+				const getArgs = [
+					'get', resource.resourceType, resource.resourceName, '-o', 'json'
+				];
+				if (resource.namespace) {
+					getArgs.push('-n', resource.namespace);
+				}
+				const { stdout } = await executeCommand('kubectl', getArgs);
+				const obj = JSON.parse(stdout);
+				const annotation = obj?.metadata?.annotations?.['crossplane.io/paused'];
+				if (annotation !== 'true') {
+					vscode.window.showWarningMessage('Pause annotation was not applied. You may not have sufficient permissions.');
+					return;
+				}
+				vscode.window.showInformationMessage(`Paused ${resource.resourceType} ${resource.resourceName}`);
+			} catch (err: any) {
+				vscode.window.showErrorMessage(`Failed to pause resource: ${err.message}`);
+			}
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.resumeResource', async (resource: CrossplaneResource) => {
+			if (!resource.resourceType || !resource.resourceName) {
+				vscode.window.showErrorMessage('Cannot resume resource: resource type or name is missing.');
+				return;
+			}
+			try {
+				const args = [
+					'annotate', resource.resourceType, resource.resourceName,
+					'crossplane.io/paused=false', '--overwrite'
+				];
+				if (resource.namespace) {
+					args.push('-n', resource.namespace);
+				}
+				const { stderr } = await executeCommand('kubectl', args);
+				if (stderr && (stderr.includes('forbidden') || stderr.toLowerCase().includes('permission'))) {
+					vscode.window.showErrorMessage(`Permission denied: ${stderr}`);
+					return;
+				}
+				// Verify annotation
+				const getArgs = [
+					'get', resource.resourceType, resource.resourceName, '-o', 'json'
+				];
+				if (resource.namespace) {
+					getArgs.push('-n', resource.namespace);
+				}
+				const { stdout } = await executeCommand('kubectl', getArgs);
+				const obj = JSON.parse(stdout);
+				const annotation = obj?.metadata?.annotations?.['crossplane.io/paused'];
+				if (annotation !== 'false') {
+					vscode.window.showWarningMessage('Resume annotation was not applied. You may not have sufficient permissions.');
+					return;
+				}
+				vscode.window.showInformationMessage(`Resumed ${resource.resourceType} ${resource.resourceName}`);
+			} catch (err: any) {
+				vscode.window.showErrorMessage(`Failed to resume resource: ${err.message}`);
+			}
+		})
+	);
 }
 
 // This method is called when your extension is deactivated

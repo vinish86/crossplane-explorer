@@ -11,6 +11,7 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 - **Beautiful Icons**: Each resource type has a clear, modern icon for easy navigation.
 - **CBT/Trace on XR**: Right-click any XR (composite resource) under deployment-flow and select **CBT** to run `crossplane beta trace` and view XR status in a tabular format in the Output panel.
 - **Field Watch (Real-Time Diff)**: Right-click any XR or MR under deployment-flow and select **Start Field Watch** to see real-time, field-level diffs for resource changes. You can also select **Stop Field Watch** to stop watching that resource. Both options are always available in the context menu, and you can run multiple Field Watches concurrently. The extension will handle duplicate start/stop requests gracefully. Powered by the Kubernetes JS client, this feature shows a clean, YAML-like diff output for every change, with no off-by-one or noisy metadata. Only meaningful changes are shown, making it easy to track resource evolution live.
+- **Pause/Resume XR and MR**: Right-click any XR or MR and select **Pause Resource** to add the annotation `crossplane.io/paused=true`, pausing reconciliation for that resource. Select **Resume Resource** to set the annotation to `crossplane.io/paused=false`, resuming reconciliation. The extension checks for permissions and verifies that the annotation was applied. If you do not have permission or the annotation was not applied, you will see a clear error or warning message. This feature is idempotent and always sets the annotation to the desired value.
 
 ## Deployment Tree Structure: claim > XR > MR
 
@@ -49,6 +50,14 @@ You can now view and watch logs for Crossplane, provider, and function pods dire
 - Expand the **logs** section to see Crossplane, provider, and function pods.
 - **Single-click** a pod to view its YAML in read-only mode.
 - **Right-click** a pod and select **Watch Log** to stream its logs (`kubectl logs -f ...`) in a VSCode output channel.
+
+## Pause/Resume and Field Watch Example
+
+Below is a screenshot showing the **Pause/Resume** and **Field Watch (Real-Time Diff)** features in action for XR and MR nodes:
+
+![Pause/Resume and Field Watch](resources/screenshots/pause-fieldwatch.png)
+
+*The screenshot demonstrates how you can right-click any XR or MR to pause/resume reconciliation or start/stop Field Watch for real-time diffs.*
 
 ## Performance & Safety: Exclude Core CRDs
 
@@ -90,11 +99,6 @@ By default, these suffixes are excluded. You can customize this list to fit your
 - Editing very large resources may be slow due to cluster/network latency.
 - Only one editor tab per resource is supported; clicking again focuses the existing tab.
 
-## Release Notes
-
-### 0.0.28
-- Initial release: resource browsing, YAML editing, status display, and more.
-
 ### Field Watch Example
 
 ```
@@ -103,6 +107,11 @@ spec:
   environment:
     ~ "dev111" → "dev112"
 ```
+
+## Release Notes
+
+### 0.0.30
+- Initial release: resource browsing, YAML editing, status display, and more.
 
 ---
 
