@@ -796,6 +796,107 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		})
 	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.compositionInit', async (resourceOrUri: any) => {
+			let targetFolder: string | undefined;
+			if (resourceOrUri && resourceOrUri.fsPath) {
+				targetFolder = resourceOrUri.fsPath;
+			} else {
+				const folders = await vscode.window.showOpenDialog({
+					canSelectFolders: true,
+					canSelectFiles: false,
+					canSelectMany: false,
+					title: 'Select a folder to initialize Crossplane composition files'
+				});
+				if (!folders || folders.length === 0) {
+					vscode.window.showInformationMessage('No folder selected.');
+					return;
+				}
+				targetFolder = folders[0].fsPath;
+			}
+
+			const path = require('path');
+			const fs = require('fs');
+			const templateDir = path.join(__dirname, '..', 'resources', 'templates');
+			const templateFiles = [
+				'composition.yaml',
+				'definition.yaml',
+				'function.yaml',
+				'observedResources.yaml',
+				'xr.yaml',
+				'environmentConfig.json',
+				'function-creds.yaml'
+			];
+
+			const created: string[] = [];
+			const skipped: string[] = [];
+			for (const filename of templateFiles) {
+				const templatePath = path.join(templateDir, filename);
+				if (!fs.existsSync(templatePath)) continue;
+				const content = fs.readFileSync(templatePath, 'utf8');
+				const destPath = path.join(targetFolder, filename);
+				if (fs.existsSync(destPath)) {
+					skipped.push(filename);
+					continue;
+				}
+				fs.writeFileSync(destPath, content);
+				created.push(filename);
+			}
+
+			let message = '';
+			if (created.length > 0) message += `Created: ${created.join(', ')}`;
+			if (skipped.length > 0) message += (message ? ' | ' : '') + `Skipped (already exist): ${skipped.join(', ')}`;
+			if (!message) message = 'No files created.';
+			vscode.window.showInformationMessage(message);
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.renderTest', async (uri: vscode.Uri) => {
+			if (!uri || !uri.fsPath) {
+				vscode.window.showErrorMessage('No folder selected. Please right-click a folder to run Render Test.');
+				return;
+			}
+			const folderPath = uri.fsPath;
+			const cmd = 'crossplane';
+			const args = [
+				'render',
+				'xr.yaml',
+				'composition.yaml',
+				'function.yaml',
+				'--observed-resources=observedResources.yaml',
+				'--context-files',
+				'apiextensions.crossplane.io/environment=environmentConfig.json',
+				'--function-credentials=function-creds.yaml'
+			];
+			const output = vscode.window.createOutputChannel('Crossplane Render Test');
+			output.show(true);
+			output.appendLine(`# Running: crossplane render xr.yaml composition.yaml function.yaml --observed-resources=observedResources.yaml --context-files apiextensions.crossplane.io/environment=environmentConfig.json --function-credentials=function-creds.yaml`);
+			const cp = require('child_process');
+			cp.execFile(cmd, args, { cwd: folderPath }, (err: any, stdout: string, stderr: string) => {
+				if (err) {
+					output.appendLine(`[ERROR] ${err.message}`);
+					if (stderr) output.appendLine(stderr);
+					vscode.window.showErrorMessage('Render Test failed. See output for details.');
+					return;
+				}
+				if (stderr) output.appendLine(stderr);
+				output.appendLine(stdout);
+				// Write output to renderResult.yaml if successful
+				try {
+					const fs = require('fs');
+					const path = require('path');
+					const resultPath = path.join(folderPath, 'renderResult.yaml');
+					fs.writeFileSync(resultPath, stdout);
+					vscode.window.showInformationMessage('Render Test completed. Output written to renderResult.yaml.');
+				} catch (writeErr: any) {
+					output.appendLine(`[ERROR] Failed to write renderResult.yaml: ${writeErr.message}`);
+					vscode.window.showErrorMessage('Render Test succeeded but failed to write renderResult.yaml. See output for details.');
+				}
+			});
+		})
+	);
 }
 
 // This method is called when your extension is deactivated

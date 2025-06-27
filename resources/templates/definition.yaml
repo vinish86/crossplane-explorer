@@ -1,0 +1,31 @@
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xexamples.v1.example.io
+spec:
+  group: v1.example.io
+  defaultCompositeDeletePolicy: Foreground
+  names:
+    kind: XExample
+    plural: xexamples
+    singular: xexample
+  claimNames:
+    kind: Example
+    plural: examples
+    singular: example
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - storageMb
+              properties:
+                storageMb:
+                  type: integer 

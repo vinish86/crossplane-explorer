@@ -1,0 +1,54 @@
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xexamples.v1.example.io
+spec:
+  compositeTypeRef:
+    apiVersion: v1.example.io/v1alpha1
+    kind: XExample
+  mode: Pipeline
+  pipeline:
+    - step: render-templates
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            ---
+            {{ $flexServerResourceName := "flexServer" }}
+            # Create an initial composed resource for which we will retrieve a value
+            apiVersion: dbforpostgresql.azure.upbound.io/v1beta1
+            kind: FlexibleServer
+            metadata:
+              annotations:
+                {{ setResourceNameAnnotation $flexServerResourceName }}
+                gotemplating.fn.crossplane.io/ready: "False"
+            spec:
+              forProvider:
+                storageMb: {{ $.observed.composite.resource.spec.storageMb }}
+              providerConfigRef:
+                name: my-provider-cfg
+            ---
+            # Use getComposedResource to retrieve the observed resource named "flexServer"
+            {{ $flexServer := getComposedResource . $flexServerResourceName }}
+            
+            apiVersion: dbforpostgresql.azure.upbound.io/v1beta1
+            kind: FlexibleServerConfiguration
+            metadata:
+              annotations:
+                {{ setResourceNameAnnotation "flexServerConfig" }}
+                gotemplating.fn.crossplane.io/ready: "False"
+            spec:
+              forProvider:
+                # Populate the field using the observed status of the retrieved resource
+                serverId: {{ get $flexServer.status "id" }}
+
+              providerConfigRef:
+                name: my-provider-cfg
+    - step: automatically-detect-ready-composed-resources
+      functionRef:
+        name: function-auto-ready 

@@ -67,6 +67,41 @@ The **Configurations** node lists all Crossplane configuration packages installe
 ### DeploymentRuntimeConfigs
 The **DeploymentRuntimeConfigs** node displays all deployment runtime configuration resources. These are used to configure runtime settings for Crossplane deployments. You can expand this node to see each config and view its YAML details.
 
+## Composition Init & Render Test (Ultra-Fast Composition Prototyping)
+
+Crossplane Explorer makes it ultra-fast and convenient to create and test Crossplane composition skeletons directly from the VSCode File Explorer:
+
+- **Composition Init**: Right-click any folder and select **Crossplane Explorer → Composition Init** to instantly scaffold a set of starter files for Crossplane composition development:
+  - `composition.yaml`
+  - `definition.yaml`
+  - `function.yaml`
+  - `xr.yaml`
+  - `observedResources.yaml`
+  - `environmentConfig.json`
+  - `function-creds.yaml`
+
+  ![Composition Init](resources/screenshots/composition-init.png)
+
+- **Render Test**: After editing your skeleton files, right-click the same folder and select **Crossplane Explorer → Render Test**. This will run a local render using the Crossplane CLI:
+
+  ```sh
+  crossplane render xr.yaml composition.yaml function.yaml --observed-resources=observedResources.yaml --context-files apiextensions.crossplane.io/environment=environmentConfig.json --function-credentials=function-creds.yaml
+  ```
+
+  - If the render is successful, the output is saved as `renderResult.yaml` in the same folder.
+  - If it fails, an error message is shown in the Output Console and as a notification.
+  - **Do not rename any of the generated files**—the Render Test depends on these exact filenames.
+  - **Dependency:** Docker must be running on your host machine for the Render Test feature to work (required by the Crossplane CLI).
+
+  ![Render Test](resources/screenshots/render-test.png)
+
+### Why use these features?
+- **Ultra-fast prototyping**: Create a working composition skeleton and test it in seconds, with just a few clicks.
+- **Confidence before deployment**: The Render Test acts as a unit test for your composition logic—if it passes, you know your composition is valid and ready for further development or deployment.
+- **Convenient workflow**: All actions are available at the folder level via right-click, making it easy to iterate and experiment.
+
+---
+
 ## Performance & Safety: Exclude Core CRDs
 
 To improve performance and reduce clutter, the extension allows you to exclude CRDs whose names end with certain suffixes (such as `crossplane.io`, `upbound.io`, `cattle.io`). This also helps prevent accidental editing of critical Crossplane, Upbound, or Rancher (cattle) CRDs.

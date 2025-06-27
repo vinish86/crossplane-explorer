@@ -23,7 +23,9 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
 
     async getChildren(element?: CrossplaneResource): Promise<CrossplaneResource[]> {
         if (!element) {
-            return Promise.resolve([new CrossplaneResource('XPExplorer', vscode.TreeItemCollapsibleState.Expanded)]);
+            return Promise.resolve([
+                new CrossplaneResource('XPExplorer', vscode.TreeItemCollapsibleState.Expanded)
+            ]);
         }
 
         if (element.label === 'XPExplorer') {
