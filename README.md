@@ -12,6 +12,7 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 - **CBT/Trace on XR**: Right-click any XR (composite resource) under deployment-flow and select **CBT** to run `crossplane beta trace` and view XR status in a tabular format in the Output panel.
 - **Field Watch (Real-Time Diff)**: Right-click any XR or MR under deployment-flow and select **Start Field Watch** to see real-time, field-level diffs for resource changes. You can also select **Stop Field Watch** to stop watching that resource. Both options are always available in the context menu, and you can run multiple Field Watches concurrently. The extension will handle duplicate start/stop requests gracefully. Powered by the Kubernetes JS client, this feature shows a clean, YAML-like diff output for every change, with no off-by-one or noisy metadata. Only meaningful changes are shown, making it easy to track resource evolution live.
 - **Pause/Resume XR and MR**: Right-click any XR or MR and select **Pause Resource** to add the annotation `crossplane.io/paused=true`, pausing reconciliation for that resource. Select **Resume Resource** to set the annotation to `crossplane.io/paused=false`, resuming reconciliation. The extension checks for permissions and verifies that the annotation was applied. If you do not have permission or the annotation was not applied, you will see a clear error or warning message. This feature is idempotent and always sets the annotation to the desired value.
+- **Start/Stop Pod Log Watch:** Dedicated Start (▶️) and Stop (⏹️) buttons are now available for watching pod logs. You can start a log watch for any pod and stop it at any time directly from the context menu or UI, making log monitoring more convenient and manageable.
 - View and manage Crossplane resources (Claims, XRs, MRs, Providers, Functions, CRDs, Compositions, Configurations, DeploymentRuntimeConfigs) in a tree view
 
 ## Deployment Tree Structure: claim > XR > MR
@@ -117,7 +118,7 @@ spec:
 
 ## Release Notes
 
-### 0.0.32
+### 0.0.35
 - Initial release: resource browsing, YAML editing, status display, and more.
 
 ---
