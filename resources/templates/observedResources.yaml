@@ -1,0 +1,41 @@
+---
+apiVersion: dbforpostgresql.azure.upbound.io/v1beta2
+kind: FlexibleServer
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: flexServer
+  labels:
+    crossplane.io/composite: example
+spec:
+  forProvider:
+    administratorLogin: psqladmin
+    administratorPasswordSecretRef:
+      key: example-key
+      name: example-secret
+      namespace: upbound-system
+    autoGeneratePassword: true
+    delegatedSubnetIdSelector:
+      matchLabels:
+        testing.upbound.io/example-name: example
+    location: West Europe
+    privateDnsZoneIdSelector:
+      matchLabels:
+        testing.upbound.io/example-name: example
+    publicNetworkAccessEnabled: false
+    resourceGroupNameSelector:
+      matchLabels:
+        testing.upbound.io/example-name: example
+    skuName: GP_Standard_D4s_v3
+    storageMb: 32768
+    storageTier: P30
+    version: "16"
+  providerConfigRef:
+    name: my-provider-cfg
+status:
+  atProvider:
+    id: abcdef
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: "foo"
+      lastTransitionTime: "2023-11-03T09:07:31Z" 

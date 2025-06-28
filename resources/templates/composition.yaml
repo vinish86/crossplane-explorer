@@ -1,0 +1,73 @@
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xexamples.v1.example.io
+spec:
+  compositeTypeRef:
+    apiVersion: v1.example.io/v1alpha1
+    kind: XExample
+  mode: Pipeline
+  pipeline:
+    - step: render-templates
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            ---
+            {{ $flexServerResourceName := "flexServer" }}
+            apiVersion: dbforpostgresql.azure.upbound.io/v1beta2
+            kind: FlexibleServer
+            metadata:
+              annotations:
+                {{ setResourceNameAnnotation $flexServerResourceName }}
+                gotemplating.fn.crossplane.io/ready: "False"
+            spec:
+              forProvider:
+                administratorLogin: psqladmin
+                administratorPasswordSecretRef:
+                  key: example-key
+                  name: example-secret
+                  namespace: upbound-system
+                autoGeneratePassword: true
+                delegatedSubnetIdSelector:
+                  matchLabels:
+                    testing.upbound.io/example-name: example
+                location: West Europe
+                privateDnsZoneIdSelector:
+                  matchLabels:
+                    testing.upbound.io/example-name: example
+                publicNetworkAccessEnabled: false
+                resourceGroupNameSelector:
+                  matchLabels:
+                    testing.upbound.io/example-name: example
+                skuName: GP_Standard_D4s_v3
+                storageMb: {{ $.observed.composite.resource.spec.storageMb }}
+                storageTier: P30
+                version: "16"
+              providerConfigRef:
+                name: my-provider-cfg
+
+            {{ $flexServer := getComposedResource . $flexServerResourceName }}
+            ---
+            apiVersion: dbforpostgresql.azure.upbound.io/v1beta1
+            kind: FlexibleServerConfiguration
+            metadata:
+              annotations:
+                {{ setResourceNameAnnotation "flexServerConfig" }}
+                gotemplating.fn.crossplane.io/ready: "False"
+            spec:
+              forProvider:
+                name: backslash_quote
+                serverId: {{ get $flexServer.status.atProvider "id" }}
+                value: test
+              providerConfigRef:
+                name: my-provider-cfg
+
+    - step: automatically-detect-ready-composed-resources
+      functionRef:
+        name: function-auto-ready 

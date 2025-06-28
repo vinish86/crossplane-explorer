@@ -1,0 +1,21 @@
+{
+    "githubOrg": "https://raw.githubusercontent.com/crossplane-contrib",
+    "providers": [
+      {
+        "name": "provider-upjet-aws",
+        "version": "v1.23.0",
+        "kinds": [
+          "vpcs.ec2.aws.upbound.io",
+          "subnets.ec2.aws.upbound.io"
+        ]
+      },
+      {
+        "name": "provider-upjet-azure",
+        "version": "v1.13.0",
+        "kinds": [
+          "flexibleservers.dbforpostgresql.azure.upbound.io",
+          "flexibleserverconfigurations.dbforpostgresql.azure.upbound.io"
+        ]
+      }
+    ]
+  }

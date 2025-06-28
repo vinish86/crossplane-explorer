@@ -1,0 +1,245 @@
+{
+  "name": "crossplane-explorer",
+  "publisher": "vinishsoman",
+  "displayName": "Crossplane Explorer",
+  "icon": "resources/icon/icon.png",
+  "description": "A Visual Studio Code extension for browsing, editing, and managing Crossplane resources in your Kubernetes cluster. Features a modern tree view, direct YAML editing, and seamless integration with kubectl.",
+  "version": "0.0.38",
+  "author": "Vinish Soman",
+  "engines": {
+    "vscode": "^1.101.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:crossplaneExplorer",
+    "onCommand:crossplaneExplorer.compositionInit"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "crossplane-explorer.helloWorld",
+        "title": "Hello World"
+      },
+      {
+        "command": "crossplane-explorer.refresh",
+        "title": "Refresh",
+        "icon": "$(extensions-refresh)"
+      },
+      {
+        "command": "crossplane-explorer.viewResource",
+        "title": "View Resource YAML"
+      },
+      {
+        "command": "crossplane-explorer.editResource",
+        "title": "Edit Resource YAML"
+      },
+      {
+        "command": "crossplane-explorer.tailPodLogs",
+        "title": "Start Watch Log",
+        "icon": "$(play)"
+      },
+      {
+        "command": "crossplane-explorer.stopPodLog",
+        "title": "Stop Watch Log",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "crossplane-explorer.cbtTrace",
+        "title": "CBT: Crossplane Beta Trace"
+      },
+      {
+        "command": "crossplaneExplorer.showLiveDiff",
+        "title": "Start Field Watch"
+      },
+      {
+        "command": "crossplaneExplorer.stopFieldWatch",
+        "title": "Stop Field Watch"
+      },
+      {
+        "command": "crossplaneExplorer.pauseResource",
+        "title": "Pause Resource"
+      },
+      {
+        "command": "crossplaneExplorer.resumeResource",
+        "title": "Resume Resource"
+      },
+      {
+        "command": "crossplaneExplorer.compositionInit",
+        "title": "Composition Init"
+      },
+      {
+        "command": "crossplaneExplorer.renderTest",
+        "title": "Render Test"
+      },
+      {
+        "command": "crossplaneExplorer.enableDebugMode",
+        "title": "Enable Debug Mode"
+      },
+      {
+        "command": "crossplaneExplorer.disableDebugMode",
+        "title": "Disable Debug Mode"
+      },
+      {
+        "command": "crossplaneExplorer.schemaValidation",
+        "title": "Schema Validation"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "crossplane-explorer",
+          "title": "Crossplane Explorer",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "crossplane-explorer": [
+        {
+          "id": "crossplaneExplorer",
+          "name": ""
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "crossplane-explorer.refresh",
+          "when": "view == crossplaneExplorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "crossplane-explorer.editResource",
+          "when": "view == crossplaneExplorer && viewItem != logs-provider-pod",
+          "group": "navigation"
+        },
+        {
+          "command": "crossplane-explorer.tailPodLogs",
+          "when": "view == crossplaneExplorer && viewItem == logs-provider-pod",
+          "group": "inline"
+        },
+        {
+          "command": "crossplane-explorer.stopPodLog",
+          "when": "view == crossplaneExplorer && viewItem == logs-provider-pod",
+          "group": "inline"
+        },
+        {
+          "command": "crossplane-explorer.cbtTrace",
+          "when": "view == crossplaneExplorer && viewItem == composite-xr",
+          "group": "navigation"
+        },
+        {
+          "command": "crossplaneExplorer.showLiveDiff",
+          "when": "view == crossplaneExplorer && (viewItem == composite-xr || viewItem == managed-resource)",
+          "group": "navigation"
+        },
+        {
+          "command": "crossplaneExplorer.stopFieldWatch",
+          "when": "view == crossplaneExplorer && (viewItem == composite-xr || viewItem == managed-resource)",
+          "group": "navigation"
+        },
+        {
+          "command": "crossplaneExplorer.pauseResource",
+          "when": "view == crossplaneExplorer && (viewItem == composite-xr || viewItem == managed-resource)",
+          "group": "navigation"
+        },
+        {
+          "command": "crossplaneExplorer.resumeResource",
+          "when": "view == crossplaneExplorer && (viewItem == composite-xr || viewItem == managed-resource)",
+          "group": "navigation"
+        },
+        {
+          "command": "crossplaneExplorer.enableDebugMode",
+          "when": "view == crossplaneExplorer && (viewItem == provider || viewItem == function)",
+          "group": "navigation@98"
+        },
+        {
+          "command": "crossplaneExplorer.disableDebugMode",
+          "when": "view == crossplaneExplorer && (viewItem == provider || viewItem == function)",
+          "group": "navigation@99"
+        }
+      ],
+      "explorer/context": [
+        {
+          "submenu": "crossplaneExplorer.submenu",
+          "when": "explorerResourceIsFolder == true",
+          "group": "navigation"
+        }
+      ],
+      "crossplaneExplorer.submenu": [
+        {
+          "command": "crossplaneExplorer.compositionInit",
+          "group": "navigation@1"
+        },
+        {
+          "command": "crossplaneExplorer.renderTest",
+          "group": "navigation@2"
+        },
+        {
+          "command": "crossplaneExplorer.schemaValidation",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Crossplane Explorer",
+      "properties": {
+        "crossplaneExplorer.excludeCrdSuffixes": {
+          "type": "array",
+          "default": [
+            "crossplane.io",
+            "upbound.io",
+            "cattle.io"
+          ],
+          "description": "CRD suffixes to exclude from the CRD list."
+        }
+      }
+    },
+    "submenus": [
+      {
+        "id": "crossplaneExplorer.submenu",
+        "label": "Crossplane Explorer"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "dependencies": {
+    "@kubernetes/client-node": "^1.3.0",
+    "deep-diff": "^1.0.2",
+    "diff": "^8.0.2",
+    "js-yaml": "^4.1.0",
+    "strip-ansi": "^7.1.0"
+  },
+  "devDependencies": {
+    "@types/deep-diff": "^1.0.5",
+    "@types/diff": "^7.0.2",
+    "@types/js-yaml": "^4.0.9",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.101.0",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.25.1",
+    "typescript": "^5.8.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vinish86/crossplane-explorer"
+  }
+}
