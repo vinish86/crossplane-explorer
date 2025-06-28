@@ -67,6 +67,17 @@ The **Configurations** node lists all Crossplane configuration packages installe
 ### DeploymentRuntimeConfigs
 The **DeploymentRuntimeConfigs** node displays all deployment runtime configuration resources. These are used to configure runtime settings for Crossplane deployments. You can expand this node to see each config and view its YAML details.
 
+## Debug Mode for Providers and Functions
+
+You can now enable or disable Debug Mode for both **Provider** and **Function** resources directly from the context menu:
+
+- **Enable Debug Mode**: Sets the `runtimeConfigRef` to use the `enable-debug` DeploymentRuntimeConfig.
+- **Disable Debug Mode**: Reverts the `runtimeConfigRef` to use the `default` DeploymentRuntimeConfig.
+
+> **Note:** Enabling or disabling debug mode will restart the corresponding provider or function pods in your cluster.
+
+![Debug Mode Context Menu](resources/screenshots/debug-mode.png)
+
 ## Composition Init & Render Test (Ultra-Fast Composition Prototyping)
 
 Crossplane Explorer makes it ultra-fast and convenient to create and test Crossplane composition skeletons directly from the VSCode File Explorer:

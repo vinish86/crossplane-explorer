@@ -468,6 +468,11 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                             arguments: [resource]
                         };
                     }
+                    if (resourceType === 'providers') {
+                        resource.contextValue = 'provider';
+                    } else if (resourceType === 'functions') {
+                        resource.contextValue = 'function';
+                    }
                     return resource;
                 });
         } catch (err: any) {

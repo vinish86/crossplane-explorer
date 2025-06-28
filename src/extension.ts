@@ -897,6 +897,109 @@ export function activate(context: vscode.ExtensionContext) {
 			});
 		})
 	);
+
+	// Helper to update provider or function runtimeConfigRef.name
+	async function updateProviderOrFunctionRuntimeConfig(resource: any, debug: boolean) {
+		const isProvider = resource.contextValue === 'provider' || resource.resourceType === 'provider' || resource.resourceType === 'providers';
+		const isFunction = resource.contextValue === 'function' || resource.resourceType === 'function' || resource.resourceType === 'functions' || resource.resourceType === 'functions.pkg.crossplane.io';
+		if (!resource || (!isProvider && !isFunction)) {
+			vscode.window.showErrorMessage('This action can only be performed on provider or function objects.');
+			return;
+		}
+		try {
+			// Determine resource kind and type
+			let kind = isProvider ? 'provider' : 'functions.pkg.crossplane.io';
+			let getCmd = ['get', kind, resource.resourceName, '-o', 'yaml'];
+			if (resource.namespace) {
+				getCmd.push('-n', resource.namespace);
+			}
+			const { stdout } = await executeCommand('kubectl', getCmd);
+
+			const obj = yaml.load(stdout) as any;
+			if (!obj || typeof obj !== 'object') {
+				vscode.window.showErrorMessage('Failed to parse resource YAML.');
+				return;
+			}
+			if (!obj['spec']) obj['spec'] = {};
+			if (!obj['spec']['runtimeConfigRef']) {
+				obj['spec']['runtimeConfigRef'] = {
+					apiVersion: 'pkg.crossplane.io/v1beta1',
+					kind: 'DeploymentRuntimeConfig',
+					name: debug ? 'enable-debug' : 'default'
+				};
+			} else {
+				obj['spec']['runtimeConfigRef']['name'] = debug ? 'enable-debug' : 'default';
+			}
+
+			const updatedYaml = yaml.dump(obj);
+			const { exec } = require('child_process');
+			const apply = exec('kubectl apply -f -', (err: any, stdout: string, stderr: string) => {
+				if (err) {
+					vscode.window.showErrorMessage(`Failed to ${debug ? 'enable' : 'disable'} debug mode. See output for details.`);
+					console.error(stderr || err.message);
+					return;
+				}
+				vscode.window.showInformationMessage(`Debug mode ${debug ? 'enabled' : 'disabled'} for ${isProvider ? 'provider' : 'function'}.`);
+			});
+			apply.stdin.write(updatedYaml);
+			apply.stdin.end();
+		} catch (err: any) {
+			vscode.window.showErrorMessage(`Failed to ${debug ? 'enable' : 'disable'} debug mode: ${err.message}`);
+		}
+	}
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.enableDebugMode', async (resource: any) => {
+			await updateProviderOrFunctionRuntimeConfig(resource, true);
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.disableDebugMode', async (resource: any) => {
+			await updateProviderOrFunctionRuntimeConfig(resource, false);
+		})
+	);
+
+	// Helper to safely delete 'enable-debug' DeploymentRuntimeConfig if not referenced
+	async function safeDeleteEnableDebugConfig() {
+		try {
+			// 1. Get all providers
+			const { stdout: providersOut } = await executeCommand('kubectl', ['get', 'provider', '-o', 'json']);
+			const providers = JSON.parse(providersOut).items || [];
+			// 2. Get all functions
+			let functions: any[] = [];
+			try {
+				const { stdout: functionsOut } = await executeCommand('kubectl', ['get', 'functions.pkg.crossplane.io', '-o', 'json']);
+				functions = JSON.parse(functionsOut).items || [];
+			} catch {}
+			// 3. Check for any reference to 'enable-debug'
+			const referenced = [...providers, ...functions].some(item =>
+				item?.spec?.runtimeConfigRef?.name === 'enable-debug'
+			);
+			if (referenced) {
+				vscode.window.showWarningMessage('Cannot delete "enable-debug" DeploymentRuntimeConfig: it is still referenced by a Provider or Function.');
+				return;
+			}
+			// 4. Delete the object
+			const { exec } = require('child_process');
+			exec('kubectl delete deploymentruntimeconfig enable-debug', (err: any, stdout: string, stderr: string) => {
+				if (err) {
+					vscode.window.showErrorMessage('Failed to delete enable-debug DeploymentRuntimeConfig. See output for details.');
+					console.error(stderr || err.message);
+					return;
+				}
+				vscode.window.showInformationMessage('enable-debug DeploymentRuntimeConfig deleted.');
+			});
+		} catch (err: any) {
+			vscode.window.showErrorMessage(`Failed to check or delete enable-debug config: ${err.message}`);
+		}
+	}
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.deleteEnableDebugConfig', async () => {
+			await safeDeleteEnableDebugConfig();
+		})
+	);
 }
 
 // This method is called when your extension is deactivated

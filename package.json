@@ -73,6 +73,14 @@
       {
         "command": "crossplaneExplorer.renderTest",
         "title": "Render Test"
+      },
+      {
+        "command": "crossplaneExplorer.enableDebugMode",
+        "title": "Enable Debug Mode"
+      },
+      {
+        "command": "crossplaneExplorer.disableDebugMode",
+        "title": "Disable Debug Mode"
       }
     ],
     "viewsContainers": {
@@ -140,6 +148,16 @@
           "command": "crossplaneExplorer.resumeResource",
           "when": "view == crossplaneExplorer && (viewItem == composite-xr || viewItem == managed-resource)",
           "group": "navigation"
+        },
+        {
+          "command": "crossplaneExplorer.enableDebugMode",
+          "when": "view == crossplaneExplorer && (viewItem == provider || viewItem == function)",
+          "group": "navigation@98"
+        },
+        {
+          "command": "crossplaneExplorer.disableDebugMode",
+          "when": "view == crossplaneExplorer && (viewItem == provider || viewItem == function)",
+          "group": "navigation@99"
         }
       ],
       "explorer/context": [
