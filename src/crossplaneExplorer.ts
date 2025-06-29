@@ -393,6 +393,40 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
             }
         }
         
+        if (element.label === 'environmentconfigs') {
+            try {
+                const { stdout } = await executeCommand('kubectl', [
+                    'get', 'environmentconfigs.apiextensions.crossplane.io', '-o', 'json'
+                ]);
+                const result = JSON.parse(stdout);
+                if (!result.items || result.items.length === 0) {
+                    return [];
+                }
+                return result.items.map((item: any) => {
+                    const name = item.metadata.name;
+                    const namespace = item.metadata.namespace;
+                    const label = `${name}${namespace ? ' (' + namespace + ')' : ''}`;
+                    const node = new CrossplaneResource(
+                        label,
+                        vscode.TreeItemCollapsibleState.None,
+                        'environmentconfigs.apiextensions.crossplane.io',
+                        name,
+                        namespace
+                    );
+                    node.command = {
+                        command: 'crossplane-explorer.viewResource',
+                        title: 'View Resource YAML',
+                        arguments: [node]
+                    };
+                    node.contextValue = 'environmentconfig';
+                    return node;
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching environmentconfigs: ${err.message}`);
+                return [];
+            }
+        }
+        
         try {
             const resourceType = element.label;
             let args = ['get', resourceType, '-o', 'json'];
@@ -486,7 +520,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
     }
 
     private getRootItems(): CrossplaneResource[] {
-        const itemLabels = ['compositions', 'configurations', 'deploymentruntimeconfigs', 'crds', 'providers', 'functions', 'logs', 'deployment-flow'];
+        const itemLabels = ['environmentconfigs', 'compositions', 'configurations', 'deploymentruntimeconfigs', 'crds', 'providers', 'functions', 'logs', 'deployment-flow'];
         return itemLabels.map(label => new CrossplaneResource(label, vscode.TreeItemCollapsibleState.Collapsed));
     }
 }
@@ -524,6 +558,9 @@ export class CrossplaneResource extends vscode.TreeItem {
                     break;
                 case 'deploymentruntimeconfigs':
                     this.iconPath = new vscode.ThemeIcon('settings-editor-label-icon');
+                    break;
+                case 'environmentconfigs':
+                    this.iconPath = new vscode.ThemeIcon('variable');
                     break;
                 case 'crds':
                     this.iconPath = new vscode.ThemeIcon('symbol-structure');
