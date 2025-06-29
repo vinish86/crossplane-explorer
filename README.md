@@ -186,7 +186,7 @@ spec:
 
 ## Release Notes
 
-### 0.0.37
+### 0.0.39
 - Initial release: resource browsing, YAML editing, status display, and more.
 
 ---
