@@ -1059,13 +1059,156 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('crossplaneExplorer.enableDebugMode', async (resource: any) => {
+			const isProvider = resource.contextValue === 'provider' || resource.resourceType === 'provider' || resource.resourceType === 'providers';
+			const resourceType = isProvider ? 'provider' : 'function';
+			const confirm = await vscode.window.showWarningMessage(
+				`Are you sure you want to enable debug mode for ${resourceType} "${resource.resourceName}"?\n\nThis will restart the underlying pod and may cause a brief service interruption.`,
+				{ modal: true },
+				'Enable Debug Mode'
+			);
+			if (confirm !== 'Enable Debug Mode') return;
 			await updateProviderOrFunctionRuntimeConfig(resource, true);
 		})
 	);
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('crossplaneExplorer.disableDebugMode', async (resource: any) => {
+			const isProvider = resource.contextValue === 'provider' || resource.resourceType === 'provider' || resource.resourceType === 'providers';
+			const resourceType = isProvider ? 'provider' : 'function';
+			const confirm = await vscode.window.showWarningMessage(
+				`Are you sure you want to disable debug mode for ${resourceType} "${resource.resourceName}"?\n\nThis will restart the underlying pod and may cause a brief service interruption.`,
+				{ modal: true },
+				'Disable Debug Mode'
+			);
+			if (confirm !== 'Disable Debug Mode') return;
 			await updateProviderOrFunctionRuntimeConfig(resource, false);
+		})
+	);
+
+	// Helper to get pod name for provider or function
+	async function getPodNameForProviderOrFunction(resource: any): Promise<{ podName: string; namespace: string } | null> {
+		const isProvider = resource.contextValue === 'provider' || resource.resourceType === 'provider' || resource.resourceType === 'providers';
+		const isFunction = resource.contextValue === 'function' || resource.resourceType === 'function' || resource.resourceType === 'functions' || resource.resourceType === 'functions.pkg.crossplane.io';
+		
+		if (!resource || (!isProvider && !isFunction)) {
+			vscode.window.showErrorMessage('This action can only be performed on provider or function objects.');
+			return null;
+		}
+
+		try {
+			// Get the provider/function to find its pod
+			let kind = isProvider ? 'provider' : 'functions.pkg.crossplane.io';
+			let getCmd = ['get', kind, resource.resourceName, '-o', 'json'];
+			if (resource.namespace) {
+				getCmd.push('-n', resource.namespace);
+			}
+			const { stdout } = await executeCommand('kubectl', getCmd);
+			const obj = JSON.parse(stdout);
+
+			// Find the pod using labels
+			const labelSelector = isProvider ? 'pkg.crossplane.io/provider' : 'pkg.crossplane.io/function';
+			const podCmd = ['get', 'pods', '--all-namespaces', '-l', labelSelector, '-o', 'json'];
+			const { stdout: podsStdout } = await executeCommand('kubectl', podCmd);
+			const pods = JSON.parse(podsStdout);
+
+			// Find the pod that belongs to this specific provider/function
+			const targetPod = pods.items.find((pod: any) => {
+				const podLabels = pod.metadata.labels || {};
+				if (isProvider) {
+					// For providers, check if the pod name contains the provider name
+					return pod.metadata.name.includes(resource.resourceName.toLowerCase());
+				} else {
+					// For functions, check if the pod name contains the function name
+					return pod.metadata.name.includes(resource.resourceName.toLowerCase());
+				}
+			});
+
+			if (!targetPod) {
+				vscode.window.showErrorMessage(`No pod found for ${isProvider ? 'provider' : 'function'} ${resource.resourceName}`);
+				return null;
+			}
+
+			return {
+				podName: targetPod.metadata.name,
+				namespace: targetPod.metadata.namespace
+			};
+		} catch (err: any) {
+			vscode.window.showErrorMessage(`Failed to find pod: ${err.message}`);
+			return null;
+		}
+	}
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.restartPod', async (resource: any) => {
+			const podInfo = await getPodNameForProviderOrFunction(resource);
+			if (!podInfo) return;
+
+			const isProvider = resource.contextValue === 'provider' || resource.resourceType === 'provider' || resource.resourceType === 'providers';
+			const resourceType = isProvider ? 'provider' : 'function';
+			
+			// Show confirmation dialog
+			const restart = await vscode.window.showWarningMessage(
+				`Are you sure you want to restart the pod for ${resourceType} "${resource.resourceName}"?\n\nPod: ${podInfo.podName} (${podInfo.namespace})\n\nThis will cause a brief interruption in service.`,
+				{ modal: true },
+				'Restart Pod'
+			);
+
+			if (restart !== 'Restart Pod') {
+				return;
+			}
+
+			try {
+				// Delete the pod to restart it (Kubernetes will recreate it)
+				const { stderr } = await executeCommand('kubectl', [
+					'delete', 'pod', podInfo.podName, '-n', podInfo.namespace
+				]);
+
+				if (stderr && !stderr.includes('deleted')) {
+					vscode.window.showErrorMessage(`Failed to restart pod: ${stderr}`);
+					return;
+				}
+
+				vscode.window.showInformationMessage(`Successfully restarted pod for ${resourceType} "${resource.resourceName}"`);
+			} catch (err: any) {
+				vscode.window.showErrorMessage(`Failed to restart pod: ${err.message}`);
+			}
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.killPod', async (resource: any) => {
+			const podInfo = await getPodNameForProviderOrFunction(resource);
+			if (!podInfo) return;
+
+			const isProvider = resource.contextValue === 'provider' || resource.resourceType === 'provider' || resource.resourceType === 'providers';
+			const resourceType = isProvider ? 'provider' : 'function';
+			
+			// Show confirmation dialog
+			const kill = await vscode.window.showWarningMessage(
+				`Are you sure you want to KILL the pod for ${resourceType} "${resource.resourceName}"?\n\nPod: ${podInfo.podName} (${podInfo.namespace})\n\n⚠️  WARNING: This will permanently delete the pod. The pod will be recreated by the deployment, but any local data will be lost.`,
+				{ modal: true },
+				'Kill Pod'
+			);
+
+			if (kill !== 'Kill Pod') {
+				return;
+			}
+
+			try {
+				// Force delete the pod
+				const { stderr } = await executeCommand('kubectl', [
+					'delete', 'pod', podInfo.podName, '-n', podInfo.namespace, '--force', '--grace-period=0'
+				]);
+
+				if (stderr && !stderr.includes('deleted')) {
+					vscode.window.showErrorMessage(`Failed to kill pod: ${stderr}`);
+					return;
+				}
+
+				vscode.window.showInformationMessage(`Successfully killed pod for ${resourceType} "${resource.resourceName}"`);
+			} catch (err: any) {
+				vscode.window.showErrorMessage(`Failed to kill pod: ${err.message}`);
+			}
 		})
 	);
 

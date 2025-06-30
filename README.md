@@ -13,6 +13,10 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 - **Field Watch (Real-Time Diff)**: Right-click any XR or MR under deployment-flow and select **Start Field Watch** to see real-time, field-level diffs for resource changes. You can also select **Stop Field Watch** to stop watching that resource. Both options are always available in the context menu, and you can run multiple Field Watches concurrently. The extension will handle duplicate start/stop requests gracefully. Powered by the Kubernetes JS client, this feature shows a clean, YAML-like diff output for every change, with no off-by-one or noisy metadata. Only meaningful changes are shown, making it easy to track resource evolution live.
 - **Pause/Resume XR and MR**: Right-click any XR or MR and select **Pause Resource** to add the annotation `crossplane.io/paused=true`, pausing reconciliation for that resource. Select **Resume Resource** to set the annotation to `crossplane.io/paused=false`, resuming reconciliation. The extension checks for permissions and verifies that the annotation was applied. If you do not have permission or the annotation was not applied, you will see a clear error or warning message. This feature is idempotent and always sets the annotation to the desired value.
 - **Start/Stop Pod Log Watch:** Dedicated Start (▶️) and Stop (⏹️) buttons are now available for watching pod logs. You can start a log watch for any pod and stop it at any time directly from the context menu or UI, making log monitoring more convenient and manageable.
+- **Restart/Kill Provider and Function Pods:** Right-click any individual Provider or Function resource in the tree and select **Restart Pod** or **Kill Pod**. 
+  - **Restart Pod**: Deletes the pod for the selected provider/function; Kubernetes will automatically recreate it. Useful for troubleshooting or applying certain changes.
+  - **Kill Pod**: Force deletes the pod immediately (with no graceful shutdown); the pod will be recreated, but any local data will be lost. Use with caution.
+  - Both actions prompt for confirmation before proceeding, to prevent accidental disruption.
 - View and manage Crossplane resources (Claims, XRs, MRs, Providers, Functions, CRDs, Compositions, Configurations, DeploymentRuntimeConfigs) in a tree view
 
 ## Deployment Tree Structure: claim > XR > MR
@@ -75,8 +79,24 @@ You can now enable or disable Debug Mode for both **Provider** and **Function** 
 - **Disable Debug Mode**: Reverts the `runtimeConfigRef` to use the `default` DeploymentRuntimeConfig.
 
 > **Note:** Enabling or disabling debug mode will restart the corresponding provider or function pods in your cluster.
+> 
+> **New:** You will be prompted for confirmation before enabling or disabling debug mode, warning you that the pod will be restarted and there may be a brief service interruption.
 
 ![Debug Mode Context Menu](resources/screenshots/debug-mode.png)
+
+## Restarting or Killing Provider/Function Pods
+
+You can now restart or force-kill the pod for any Provider or Function directly from the context menu:
+
+- **Restart Pod**: Right-click a provider or function and select **Restart Pod**. This will delete the pod, causing Kubernetes to recreate it. Useful for troubleshooting or applying config changes.
+- **Kill Pod**: Right-click a provider or function and select **Kill Pod**. This will force delete the pod immediately (no graceful shutdown). The pod will be recreated, but any local data will be lost.
+
+Both actions will show a confirmation dialog before proceeding:
+
+![Restart Pod Confirmation](resources/screenshots/restart-pod-confirmation.png)
+![Kill Pod Confirmation](resources/screenshots/kill-pod-confirmation.png)
+
+> **Note:** These options are only available when you right-click on an individual provider or function resource, not on the category folders.
 
 ## Composition Init & Render Test (Ultra-Fast Composition Prototyping)
 
@@ -124,14 +144,6 @@ You can now validate your rendered Crossplane resources against the downloaded C
 Example output:
 
 ![Schema Validation Output](resources/screenshots/schema-validation-output.png)
-
-```
-# Validating: crossplane beta validate schema/downloaded-crds.yaml renderTestOutput.yaml
-    ✅ v1.example.io/v1alpha1, Kind=XExample, example1 validated successfully
-    ✅ dbforpostgresql.azure.upbound.io/v1beta2, Kind=FlexibleServer, flexServer validated successfully
-    ✅ dbforpostgresql.azure.upbound.io/v1beta1, Kind=FlexibleServerConfiguration, flexServerConfig validated successfully
-✅ Total 3 resources: 0 missing schemas, 3 success cases, 0 failure cases
-```
 
 ---
 
