@@ -828,7 +828,8 @@ export function activate(context: vscode.ExtensionContext) {
 				'xr.yaml',
 				'environmentConfig.json',
 				'function-creds.yaml',
-				'providers-metadata.json'
+				'providers-metadata.json',
+				'extraResources.yaml'
 			];
 
 			const created: string[] = [];
@@ -871,6 +872,7 @@ export function activate(context: vscode.ExtensionContext) {
 				'composition.yaml',
 				'function.yaml',
 				'--observed-resources=observedResources.yaml',
+				'--extra-resources=extraResources.yaml',
 				'--context-files',
 				'apiextensions.crossplane.io/environment=environmentConfig.json',
 				'--function-credentials=function-creds.yaml',
@@ -1312,6 +1314,176 @@ export function activate(context: vscode.ExtensionContext) {
 		const relOutputFile = path.relative(folderPath, outputFile);
 		outputChannel.appendLine(`📦 All CRDs merged into: ${relOutputFile}`);
 	}
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.deployComposition', async (uri: vscode.Uri) => {
+			if (!uri || !uri.fsPath) {
+				vscode.window.showErrorMessage('No folder selected. Please right-click a folder to run Deploy.');
+				return;
+			}
+			const folderPath = uri.fsPath;
+			const output = vscode.window.createOutputChannel('Crossplane Deploy');
+			output.show(true);
+
+			// Confirmation dialog
+			const confirm = await vscode.window.showWarningMessage(
+				'Are you sure you want to deploy? This will apply definition.yaml and then composition.yaml to the cluster (in that order).',
+				{ modal: true },
+				'Deploy'
+			);
+			if (confirm !== 'Deploy') return;
+
+			const path = require('path');
+			const fs = require('fs');
+			const defPath = path.join(folderPath, 'definition.yaml');
+			const compPath = path.join(folderPath, 'composition.yaml');
+
+			// Check if files exist
+			if (!fs.existsSync(defPath)) {
+				vscode.window.showErrorMessage('definition.yaml not found in the selected folder.');
+				output.appendLine('❌ definition.yaml not found.');
+				return;
+			}
+			if (!fs.existsSync(compPath)) {
+				vscode.window.showErrorMessage('composition.yaml not found in the selected folder.');
+				output.appendLine('❌ composition.yaml not found.');
+				return;
+			}
+
+			// Apply definition.yaml
+			output.appendLine(`# Applying: kubectl apply -f definition.yaml`);
+			const { executeCommand } = require('./utils');
+			try {
+				const defResult = await executeCommand('kubectl', ['apply', '-f', defPath]);
+				output.appendLine(defResult.stdout);
+				if (defResult.stderr) output.appendLine(defResult.stderr);
+				vscode.window.showInformationMessage('definition.yaml applied successfully.');
+			} catch (err) {
+				output.appendLine(`❌ Failed to apply definition.yaml: ${(err as any).message}`);
+				vscode.window.showErrorMessage(`Failed to apply definition.yaml: ${(err as any).message}`);
+				return;
+			}
+
+			// Apply composition.yaml
+			output.appendLine(`# Applying: kubectl apply -f composition.yaml`);
+			try {
+				const compResult = await executeCommand('kubectl', ['apply', '-f', compPath]);
+				output.appendLine(compResult.stdout);
+				if (compResult.stderr) output.appendLine(compResult.stderr);
+				vscode.window.showInformationMessage('composition.yaml applied successfully.');
+			} catch (err) {
+				output.appendLine(`❌ Failed to apply composition.yaml: ${(err as any).message}`);
+				vscode.window.showErrorMessage(`Failed to apply composition.yaml: ${(err as any).message}`);
+				return;
+			}
+
+			// Apply xr.yaml (if it exists)
+			const xrPath = path.join(folderPath, 'xr.yaml');
+			if (fs.existsSync(xrPath)) {
+				output.appendLine(`# Applying: kubectl apply -f xr.yaml`);
+				try {
+					const xrResult = await executeCommand('kubectl', ['apply', '-f', xrPath]);
+					output.appendLine(xrResult.stdout);
+					if (xrResult.stderr) output.appendLine(xrResult.stderr);
+					vscode.window.showInformationMessage('xr.yaml applied successfully.');
+				} catch (err) {
+					output.appendLine(`❌ Failed to apply xr.yaml: ${(err as any).message}`);
+					vscode.window.showErrorMessage(`Failed to apply xr.yaml: ${(err as any).message}`);
+					return;
+				}
+			} else {
+				output.appendLine('ℹ️ xr.yaml not found, skipping.');
+			}
+
+			output.appendLine('✅ Deploy completed.');
+			vscode.window.showInformationMessage('Deploy completed: definition.yaml, composition.yaml, and (if present) xr.yaml applied.');
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.undeployComposition', async (uri: vscode.Uri) => {
+			if (!uri || !uri.fsPath) {
+				vscode.window.showErrorMessage('No folder selected. Please right-click a folder to run UnDeploy.');
+				return;
+			}
+			const folderPath = uri.fsPath;
+			const output = vscode.window.createOutputChannel('Crossplane UnDeploy');
+			output.show(true);
+
+			// Confirmation dialog with strong warning
+			const confirm = await vscode.window.showWarningMessage(
+				'Are you sure you want to UNDEPLOY? This will delete xr.yaml (if present), then composition.yaml, then definition.yaml from the cluster (in that order).\n\n⚠️ WARNING: Make sure you have checked the cluster and that the definition in this folder is not being used by any other XRs. This action is irreversible.',
+				{ modal: true },
+				'UnDeploy'
+			);
+			if (confirm !== 'UnDeploy') return;
+
+			const path = require('path');
+			const fs = require('fs');
+			const { executeCommand } = require('./utils');
+
+			// Delete xr.yaml (if it exists)
+			const xrPath = path.join(folderPath, 'xr.yaml');
+			if (fs.existsSync(xrPath)) {
+				output.appendLine(`# Deleting: kubectl delete -f xr.yaml`);
+				try {
+					const xrResult = await executeCommand('kubectl', ['delete', '-f', xrPath]);
+					output.appendLine(xrResult.stdout);
+					if (xrResult.stderr) output.appendLine(xrResult.stderr);
+					vscode.window.showInformationMessage('xr.yaml deleted successfully.');
+				} catch (err) {
+					output.appendLine(`❌ Failed to delete xr.yaml: ${(err as any).message}`);
+					vscode.window.showErrorMessage(`Failed to delete xr.yaml: ${(err as any).message}`);
+					return;
+				}
+			} else {
+				output.appendLine('ℹ️ xr.yaml not found, skipping.');
+			}
+
+			// Delete composition.yaml
+			const compPath = path.join(folderPath, 'composition.yaml');
+			if (fs.existsSync(compPath)) {
+				output.appendLine(`# Deleting: kubectl delete -f composition.yaml`);
+				try {
+					const compResult = await executeCommand('kubectl', ['delete', '-f', compPath]);
+					output.appendLine(compResult.stdout);
+					if (compResult.stderr) output.appendLine(compResult.stderr);
+					vscode.window.showInformationMessage('composition.yaml deleted successfully.');
+				} catch (err) {
+					output.appendLine(`❌ Failed to delete composition.yaml: ${(err as any).message}`);
+					vscode.window.showErrorMessage(`Failed to delete composition.yaml: ${(err as any).message}`);
+					return;
+				}
+			} else {
+				output.appendLine('❌ composition.yaml not found.');
+				vscode.window.showErrorMessage('composition.yaml not found in the selected folder.');
+				return;
+			}
+
+			// Delete definition.yaml
+			const defPath = path.join(folderPath, 'definition.yaml');
+			if (fs.existsSync(defPath)) {
+				output.appendLine(`# Deleting: kubectl delete -f definition.yaml`);
+				try {
+					const defResult = await executeCommand('kubectl', ['delete', '-f', defPath]);
+					output.appendLine(defResult.stdout);
+					if (defResult.stderr) output.appendLine(defResult.stderr);
+					vscode.window.showInformationMessage('definition.yaml deleted successfully.');
+				} catch (err) {
+					output.appendLine(`❌ Failed to delete definition.yaml: ${(err as any).message}`);
+					vscode.window.showErrorMessage(`Failed to delete definition.yaml: ${(err as any).message}`);
+					return;
+				}
+			} else {
+				output.appendLine('❌ definition.yaml not found.');
+				vscode.window.showErrorMessage('definition.yaml not found in the selected folder.');
+				return;
+			}
+
+			output.appendLine('✅ UnDeploy completed.');
+			vscode.window.showInformationMessage('UnDeploy completed: xr.yaml (if present), composition.yaml, and definition.yaml deleted.');
+		})
+	);
 }
 
 // This method is called when your extension is deactivated

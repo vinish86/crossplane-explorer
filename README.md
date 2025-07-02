@@ -116,7 +116,7 @@ Crossplane Explorer makes it ultra-fast and convenient to create and test Crossp
 - **Render Test**: After editing your skeleton files, right-click the same folder and select **Crossplane Explorer → Render Test**. This will run a local render using the Crossplane CLI:
 
   ```sh
-  crossplane render xr.yaml composition.yaml function.yaml --observed-resources=observedResources.yaml --context-files apiextensions.crossplane.io/environment=environmentConfig.json --function-credentials=function-creds.yaml
+  crossplane render xr.yaml composition.yaml function.yaml --observed-resources=observedResources.yaml --extra-resources=extraResources.yaml --context-files apiextensions.crossplane.io/environment=environmentConfig.json --function-credentials=function-creds.yaml
   ```
 
   - If the render is successful, the output is saved as `renderResult.yaml` in the same folder.
@@ -144,6 +144,23 @@ You can now validate your rendered Crossplane resources against the downloaded C
 Example output:
 
 ![Schema Validation Output](resources/screenshots/schema-validation-output.png)
+
+---
+
+## Deploy & UnDeploy
+
+You can now deploy or undeploy your Crossplane composition files directly from the folder context menu:
+
+- **Deploy**: Applies `definition.yaml`, then `composition.yaml`, and finally (if present) `xr.yaml` to your cluster, always in this order. This ensures the definition and composition are registered before any sample XR is created.
+  - You will be prompted for confirmation before deploying.
+  - Results are shown in the output channel and as notifications.
+
+- **UnDeploy**: Deletes `xr.yaml` (if present), then `composition.yaml`, then `definition.yaml` from your cluster, always in this order.
+  - **Warning:** You will be prompted for confirmation and reminded to check that the definition is not used by any other XRs in your cluster. This action is irreversible.
+  - Results are shown in the output channel and as notifications.
+
+**How to use:**
+- Right-click any folder containing your composition files and select **Deploy** or **UnDeploy** from the context menu.
 
 ---
 
