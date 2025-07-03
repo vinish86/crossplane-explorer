@@ -176,14 +176,14 @@ function parseMetrics(output: string): MetricItem[] {
   }
 
   // Group nodes with icons for Crossplane
-  const crossplaneNode = new MetricItem(`Crossplane (${crossplanePods.length})`, vscode.TreeItemCollapsibleState.Expanded, crossplanePods);
+  const crossplaneNode = new MetricItem(`Crossplane (${crossplanePods.length})`, vscode.TreeItemCollapsibleState.Collapsed, crossplanePods);
   crossplaneNode.iconPath = {
     light: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-light.svg')),
     dark: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-dark.svg'))
   };
-  const functionNode = new MetricItem(`Function (${functionPods.length})`, vscode.TreeItemCollapsibleState.Expanded, functionPods);
+  const functionNode = new MetricItem(`Function (${functionPods.length})`, vscode.TreeItemCollapsibleState.Collapsed, functionPods);
   functionNode.iconPath = new vscode.ThemeIcon('symbol-function');
-  const providerNode = new MetricItem(`Providers (${providerPods.length})`, vscode.TreeItemCollapsibleState.Expanded, providerPods);
+  const providerNode = new MetricItem(`Providers (${providerPods.length})`, vscode.TreeItemCollapsibleState.Collapsed, providerPods);
   providerNode.iconPath = new vscode.ThemeIcon('plug');
 
   const podsNode = new MetricItem('Pods', vscode.TreeItemCollapsibleState.Expanded, [
@@ -194,7 +194,7 @@ function parseMetrics(output: string): MetricItem[] {
   podsNode.iconPath = new vscode.ThemeIcon('package');
 
   // Crossplane root node
-  const crossplaneSummaryNode = new MetricItem('Crossplane', vscode.TreeItemCollapsibleState.Expanded, [
+  const crossplaneSummaryNode = new MetricItem('Crossplane', vscode.TreeItemCollapsibleState.Collapsed, [
     ...crossplaneSummary,
     podsNode
   ]);
@@ -205,7 +205,7 @@ function parseMetrics(output: string): MetricItem[] {
 
   // --- Cluster Node ---
   const clusterIconBase = require('path').join(__dirname, '..', 'resources');
-  const clusterNode = new MetricItem('Cluster', vscode.TreeItemCollapsibleState.Expanded);
+  const clusterNode = new MetricItem('Cluster', vscode.TreeItemCollapsibleState.Collapsed);
   clusterNode.iconPath = {
     light: vscode.Uri.file(require('path').join(clusterIconBase, 'cluster-light.svg')),
     dark: vscode.Uri.file(require('path').join(clusterIconBase, 'cluster-dark.svg'))
