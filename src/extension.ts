@@ -1496,9 +1496,23 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.registerTreeDataProvider('crossplaneMetricsTree', metricsProvider)
 	);
 
-	// Start metrics for both nodes on activation (eager fetching)
-	metricsProvider.startCrossplaneMetrics();
-	metricsProvider.startClusterMetrics();
+	// Start/stop metrics fetchers only on expand/collapse
+	metricsTreeView.onDidExpandElement(e => {
+		if (e.element.label === 'Crossplane') {
+			metricsProvider.startCrossplaneMetrics();
+		}
+		if (e.element.label === 'Cluster') {
+			metricsProvider.startClusterMetrics();
+		}
+	});
+	metricsTreeView.onDidCollapseElement(e => {
+		if (e.element.label === 'Crossplane') {
+			metricsProvider.stopCrossplaneMetrics();
+		}
+		if (e.element.label === 'Cluster') {
+			metricsProvider.stopClusterMetrics();
+		}
+	});
 }
 
 // This method is called when your extension is deactivated

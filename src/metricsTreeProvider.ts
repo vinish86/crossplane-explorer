@@ -10,6 +10,8 @@ export class CrossplaneMetricsTreeProvider implements vscode.TreeDataProvider<Me
   private clusterMetrics: string = '';
   private crossplaneProc: ChildProcessWithoutNullStreams | null = null;
   private clusterProc: ChildProcessWithoutNullStreams | null = null;
+  private clusterInterval: NodeJS.Timeout | null = null;
+  private crossplaneInterval: NodeJS.Timeout | null = null;
 
   constructor() {}
 
@@ -29,60 +31,66 @@ export class CrossplaneMetricsTreeProvider implements vscode.TreeDataProvider<Me
   }
 
   startCrossplaneMetrics() {
-    if (this.crossplaneProc) return;
-    this.crossplaneProc = spawn('crossplane', ['beta', 'top', '-s']);
+    if (this.crossplaneInterval) return;
+    this.runCrossplaneMetrics();
+    this.crossplaneInterval = setInterval(() => {
+      this.runCrossplaneMetrics();
+    }, 5000);
+  }
+
+  runCrossplaneMetrics() {
+    const proc = spawn('crossplane', ['beta', 'top', '-s']);
     let buffer = '';
-    this.crossplaneProc.stdout.on('data', data => {
+    proc.stdout.on('data', data => {
       buffer += data.toString();
-      // Only update on full output (ends with \n\n)
-      if (buffer.endsWith('\n\n') || buffer.endsWith('\n')) {
-        this.updateCrossplaneMetrics(buffer);
-        buffer = '';
-      }
     });
-    this.crossplaneProc.stderr.on('data', data => {
+    proc.stdout.on('end', () => {
+      this.updateCrossplaneMetrics(buffer);
+    });
+    proc.stderr.on('data', data => {
       // Optionally handle errors
     });
-    this.crossplaneProc.on('close', () => {
-      this.crossplaneProc = null;
+    proc.on('close', () => {
+      // No action needed
     });
   }
 
   stopCrossplaneMetrics() {
-    if (this.crossplaneProc) {
-      this.crossplaneProc.kill();
-      this.crossplaneProc = null;
+    if (this.crossplaneInterval) {
+      clearInterval(this.crossplaneInterval);
+      this.crossplaneInterval = null;
     }
   }
 
   startClusterMetrics() {
-    console.log('[DEBUG] startClusterMetrics called');
-    if (this.clusterProc) return;
-    this.clusterProc = spawn('kubectl', ['top', 'nodes']);
+    if (this.clusterInterval) return;
+    this.runClusterMetrics();
+    this.clusterInterval = setInterval(() => {
+      this.runClusterMetrics();
+    }, 5000);
+  }
+
+  runClusterMetrics() {
+    const proc = spawn('kubectl', ['top', 'nodes']);
     let buffer = '';
-    this.clusterProc.stdout.on('data', data => {
+    proc.stdout.on('data', data => {
       buffer += data.toString();
-      // Only update on full output (ends with \n\n)
-      if (buffer.endsWith('\n\n') || buffer.endsWith('\n')) {
-        console.log('[DEBUG] Cluster metrics data received:', buffer);
-        this.updateClusterMetrics(buffer);
-        buffer = '';
-      }
     });
-    this.clusterProc.stderr.on('data', data => {
+    proc.stdout.on('end', () => {
+      this.updateClusterMetrics(buffer);
+    });
+    proc.stderr.on('data', data => {
       // Optionally handle errors
-      console.error('[DEBUG] Cluster metrics stderr:', data.toString());
     });
-    this.clusterProc.on('close', () => {
-      this.clusterProc = null;
-      console.log('[DEBUG] Cluster metrics process closed');
+    proc.on('close', () => {
+      // No action needed
     });
   }
 
   stopClusterMetrics() {
-    if (this.clusterProc) {
-      this.clusterProc.kill();
-      this.clusterProc = null;
+    if (this.clusterInterval) {
+      clearInterval(this.clusterInterval);
+      this.clusterInterval = null;
     }
   }
 
@@ -90,38 +98,30 @@ export class CrossplaneMetricsTreeProvider implements vscode.TreeDataProvider<Me
     return element;
   }
 
-  getChildren(element?: MetricItem): Thenable<MetricItem[]> {
+  async getChildren(element?: MetricItem): Promise<MetricItem[]> {
     if (!element) {
       // Root nodes
-      return Promise.resolve(parseMetrics(this.crossplaneMetrics));
+      return parseMetrics(this.crossplaneMetrics);
     }
     if (element.label === 'Cluster') {
       if (!this.clusterMetrics.trim()) {
-        // Show a loading indicator if no data yet
-        return Promise.resolve([
-          (() => { 
-            const i = new MetricItem('Loading...', vscode.TreeItemCollapsibleState.None); 
-            i.iconPath = new vscode.ThemeIcon('sync~spin'); 
-            return i; 
-          })()
-        ]);
+        // Start the process if not already running
+        this.startClusterMetrics();
+        // Return empty array; VS Code will show spinner
+        return [];
       }
-      return Promise.resolve(parseClusterMetrics(this.clusterMetrics));
+      return parseClusterMetrics(this.clusterMetrics);
     }
     if (element.label === 'Crossplane') {
       if (!this.crossplaneMetrics.trim()) {
-        // Show a loading indicator if no data yet
-        return Promise.resolve([
-          (() => { 
-            const i = new MetricItem('Loading...', vscode.TreeItemCollapsibleState.None); 
-            i.iconPath = new vscode.ThemeIcon('sync~spin'); 
-            return i; 
-          })()
-        ]);
+        // Start the process if not already running
+        this.startCrossplaneMetrics();
+        // Return empty array; VS Code will show spinner
+        return [];
       }
-      return Promise.resolve(parseMetrics(this.crossplaneMetrics)[0].children || []);
+      return parseMetrics(this.crossplaneMetrics)[0].children || [];
     }
-    return Promise.resolve(element.children || []);
+    return element.children || [];
   }
 }
 
