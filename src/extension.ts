@@ -1513,6 +1513,41 @@ export function activate(context: vscode.ExtensionContext) {
 			metricsProvider.stopClusterMetrics();
 		}
 	});
+
+	context.subscriptions.push(vscode.commands.registerCommand('crossplane-explorer.deleteResource', async (resource: CrossplaneResource) => {
+		if (!resource || !resource.resourceType || !resource.resourceName) {
+			vscode.window.showErrorMessage('Cannot delete: resource type or name missing.');
+			return;
+		}
+		const confirm = await vscode.window.showWarningMessage(
+			`Are you sure you want to delete ${resource.resourceType} '${resource.resourceName}'? This action cannot be undone.`,
+			{ modal: true },
+			'Delete'
+		);
+		if (confirm !== 'Delete') return;
+		try {
+			let deleteArgs: string[];
+			if (resource.resourceType === 'xrd') {
+				deleteArgs = ['delete', 'xrd', resource.resourceName];
+			} else if (resource.resourceType === 'crd') {
+				deleteArgs = ['delete', 'crd', resource.resourceName];
+			} else {
+				deleteArgs = ['delete', resource.resourceType, resource.resourceName];
+				if (resource.namespace) {
+					deleteArgs.push('-n', resource.namespace);
+				}
+			}
+			const { stdout, stderr } = await executeCommand('kubectl', deleteArgs);
+			if (stderr && !stdout) {
+				vscode.window.showErrorMessage(stderr);
+				return;
+			}
+			vscode.window.showInformationMessage(`${resource.resourceType} '${resource.resourceName}' deleted.`);
+			crossplaneExplorerProvider.refresh();
+		} catch (err: any) {
+			vscode.window.showErrorMessage(`Failed to delete: ${err.message}`);
+		}
+	}));
 }
 
 // This method is called when your extension is deactivated

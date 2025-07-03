@@ -101,6 +101,10 @@
       {
         "command": "crossplaneExplorer.undeployComposition",
         "title": "UnDeploy"
+      },
+      {
+        "command": "crossplane-explorer.deleteResource",
+        "title": "Delete Resource"
       }
     ],
     "viewsContainers": {
@@ -192,6 +196,11 @@
           "command": "crossplaneExplorer.killPod",
           "when": "view == crossplaneExplorer && (viewItem == provider || viewItem == function)",
           "group": "navigation@101"
+        },
+        {
+          "command": "crossplane-explorer.deleteResource",
+          "when": "view == crossplaneExplorer && (viewItem == environmentconfig || viewItem == composition || viewItem == configuration || viewItem == deploymentruntimeconfig || viewItem == xrd || viewItem == provider || viewItem == function || viewItem == providerconfig)",
+          "group": "navigation@99"
         }
       ],
       "explorer/context": [

@@ -462,6 +462,72 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
             }
         }
         
+        if (element.label === 'compositions') {
+            try {
+                const { stdout } = await executeCommand('kubectl', [
+                    'get', 'compositions', '-o', 'json'
+                ]);
+                const result = JSON.parse(stdout);
+                if (!result.items || result.items.length === 0) {
+                    return [];
+                }
+                return result.items.map((item: any) => {
+                    const name = item.metadata.name;
+                    const namespace = item.metadata.namespace;
+                    const label = `${name}${namespace ? ' (' + namespace + ')' : ''}`;
+                    const node = new CrossplaneResource(
+                        label,
+                        vscode.TreeItemCollapsibleState.None,
+                        'compositions',
+                        name,
+                        namespace
+                    );
+                    node.command = {
+                        command: 'crossplane-explorer.viewResource',
+                        title: 'View Resource YAML',
+                        arguments: [node]
+                    };
+                    node.contextValue = 'composition';
+                    return node;
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching compositions: ${err.message}`);
+                return [];
+            }
+        }
+        
+        if (element.label === 'xrds') {
+            try {
+                const { stdout } = await executeCommand('kubectl', [
+                    'get', 'xrds', '-o', 'json'
+                ]);
+                const result = JSON.parse(stdout);
+                if (!result.items || result.items.length === 0) {
+                    return [];
+                }
+                return result.items.map((item: any) => {
+                    const name = item.metadata.name;
+                    const node = new CrossplaneResource(
+                        name,
+                        vscode.TreeItemCollapsibleState.None,
+                        'xrd',
+                        name
+                    );
+                    node.command = {
+                        command: 'crossplane-explorer.viewResource',
+                        title: 'View Resource YAML',
+                        arguments: [node]
+                    };
+                    node.contextValue = 'xrd';
+                    node.iconPath = new vscode.ThemeIcon('symbol-structure');
+                    return node;
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching xrds: ${err.message}`);
+                return [];
+            }
+        }
+        
         try {
             const resourceType = element.label;
             let args = ['get', resourceType, '-o', 'json'];
@@ -555,7 +621,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
     }
 
     private getRootItems(): CrossplaneResource[] {
-        const itemLabels = ['environmentconfigs', 'compositions', 'configurations', 'deploymentruntimeconfigs', 'crds', 'providers', 'functions', 'providerconfigs', 'logs', 'deployment-flow'];
+        const itemLabels = ['environmentconfigs', 'compositions', 'configurations', 'deploymentruntimeconfigs', 'xrds', 'providers', 'functions', 'providerconfigs', 'logs', 'deployment-flow'];
         return itemLabels.map(label => new CrossplaneResource(label, vscode.TreeItemCollapsibleState.Collapsed));
     }
 }
@@ -634,6 +700,9 @@ export class CrossplaneResource extends vscode.TreeItem {
                     break;
                 case 'providerconfigs':
                     this.iconPath = new vscode.ThemeIcon('unfold');
+                    break;
+                case 'xrds':
+                    this.iconPath = new vscode.ThemeIcon('symbol-structure');
                     break;
             }
         }
