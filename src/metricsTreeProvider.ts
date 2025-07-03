@@ -1,26 +1,89 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
+import { exec, spawn, ChildProcessWithoutNullStreams } from 'child_process';
 
 export class CrossplaneMetricsTreeProvider implements vscode.TreeDataProvider<MetricItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<MetricItem | undefined | void> = new vscode.EventEmitter<MetricItem | undefined | void>();
   readonly onDidChangeTreeData: vscode.Event<MetricItem | undefined | void> = this._onDidChangeTreeData.event;
 
   private metrics: MetricItem[] = [];
+  private crossplaneMetrics: string = '';
+  private clusterMetrics: string = '';
+  private crossplaneProc: ChildProcessWithoutNullStreams | null = null;
+  private clusterProc: ChildProcessWithoutNullStreams | null = null;
 
-  constructor() {
-    this.refresh();
-    setInterval(() => this.refresh(), 5000); // Refresh every 5 seconds
-  }
+  constructor() {}
 
   refresh(): void {
-    exec('crossplane beta top -s', (err, stdout, stderr) => {
-      if (err || stderr) {
-        this.metrics = [new MetricItem('Error fetching metrics', vscode.TreeItemCollapsibleState.None)];
-      } else {
-        this.metrics = parseMetrics(stdout);
+    this._onDidChangeTreeData.fire();
+  }
+
+  // Called by the process handlers
+  updateCrossplaneMetrics(data: string) {
+    this.crossplaneMetrics = data;
+    this.refresh();
+  }
+
+  updateClusterMetrics(data: string) {
+    this.clusterMetrics = data;
+    this.refresh();
+  }
+
+  startCrossplaneMetrics() {
+    if (this.crossplaneProc) return;
+    this.crossplaneProc = spawn('crossplane', ['beta', 'top', '-s']);
+    let buffer = '';
+    this.crossplaneProc.stdout.on('data', data => {
+      buffer += data.toString();
+      // Only update on full output (ends with \n\n)
+      if (buffer.endsWith('\n\n') || buffer.endsWith('\n')) {
+        this.updateCrossplaneMetrics(buffer);
+        buffer = '';
       }
-      this._onDidChangeTreeData.fire();
     });
+    this.crossplaneProc.stderr.on('data', data => {
+      // Optionally handle errors
+    });
+    this.crossplaneProc.on('close', () => {
+      this.crossplaneProc = null;
+    });
+  }
+
+  stopCrossplaneMetrics() {
+    if (this.crossplaneProc) {
+      this.crossplaneProc.kill();
+      this.crossplaneProc = null;
+    }
+  }
+
+  startClusterMetrics() {
+    console.log('[DEBUG] startClusterMetrics called');
+    if (this.clusterProc) return;
+    this.clusterProc = spawn('kubectl', ['top', 'nodes']);
+    let buffer = '';
+    this.clusterProc.stdout.on('data', data => {
+      buffer += data.toString();
+      // Only update on full output (ends with \n\n)
+      if (buffer.endsWith('\n\n') || buffer.endsWith('\n')) {
+        console.log('[DEBUG] Cluster metrics data received:', buffer);
+        this.updateClusterMetrics(buffer);
+        buffer = '';
+      }
+    });
+    this.clusterProc.stderr.on('data', data => {
+      // Optionally handle errors
+      console.error('[DEBUG] Cluster metrics stderr:', data.toString());
+    });
+    this.clusterProc.on('close', () => {
+      this.clusterProc = null;
+      console.log('[DEBUG] Cluster metrics process closed');
+    });
+  }
+
+  stopClusterMetrics() {
+    if (this.clusterProc) {
+      this.clusterProc.kill();
+      this.clusterProc = null;
+    }
   }
 
   getTreeItem(element: MetricItem): vscode.TreeItem {
@@ -29,18 +92,24 @@ export class CrossplaneMetricsTreeProvider implements vscode.TreeDataProvider<Me
 
   getChildren(element?: MetricItem): Thenable<MetricItem[]> {
     if (!element) {
-      return Promise.resolve(this.metrics);
+      // Root nodes
+      return Promise.resolve(parseMetrics(this.crossplaneMetrics));
     }
     if (element.label === 'Cluster') {
-      return new Promise(resolve => {
-        exec('kubectl top nodes', (err, stdout, stderr) => {
-          if (err || stderr) {
-            resolve([new MetricItem('Error fetching cluster metrics', vscode.TreeItemCollapsibleState.None)]);
-          } else {
-            resolve(parseClusterMetrics(stdout));
-          }
-        });
-      });
+      if (!this.clusterMetrics.trim()) {
+        // Show a loading indicator if no data yet
+        return Promise.resolve([
+          (() => { 
+            const i = new MetricItem('Loading...', vscode.TreeItemCollapsibleState.None); 
+            i.iconPath = new vscode.ThemeIcon('sync~spin'); 
+            return i; 
+          })()
+        ]);
+      }
+      return Promise.resolve(parseClusterMetrics(this.clusterMetrics));
+    }
+    if (element.label === 'Crossplane') {
+      return Promise.resolve(parseMetrics(this.crossplaneMetrics)[0].children || []);
     }
     return Promise.resolve(element.children || []);
   }
@@ -59,6 +128,7 @@ export class MetricItem extends vscode.TreeItem {
 }
 
 function parseMetrics(output: string): MetricItem[] {
+  const iconBase = require('path').join(__dirname, '..', 'resources');
   const lines = output.trim().split('\n');
   const pods = lines[0]?.split(':')[1]?.trim() || '-';
   const crossplane = lines[1]?.split(':')[1]?.trim() || '-';
@@ -106,11 +176,14 @@ function parseMetrics(output: string): MetricItem[] {
   }
 
   // Group nodes with icons for Crossplane
-  const crossplaneNode = new MetricItem(`Crossplane (${crossplanePods.length})`, vscode.TreeItemCollapsibleState.Collapsed, crossplanePods);
-  crossplaneNode.iconPath = new vscode.ThemeIcon('cloud');
-  const functionNode = new MetricItem(`Function (${functionPods.length})`, vscode.TreeItemCollapsibleState.Collapsed, functionPods);
+  const crossplaneNode = new MetricItem(`Crossplane (${crossplanePods.length})`, vscode.TreeItemCollapsibleState.Expanded, crossplanePods);
+  crossplaneNode.iconPath = {
+    light: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-light.svg')),
+    dark: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-dark.svg'))
+  };
+  const functionNode = new MetricItem(`Function (${functionPods.length})`, vscode.TreeItemCollapsibleState.Expanded, functionPods);
   functionNode.iconPath = new vscode.ThemeIcon('symbol-function');
-  const providerNode = new MetricItem(`Providers (${providerPods.length})`, vscode.TreeItemCollapsibleState.Collapsed, providerPods);
+  const providerNode = new MetricItem(`Providers (${providerPods.length})`, vscode.TreeItemCollapsibleState.Expanded, providerPods);
   providerNode.iconPath = new vscode.ThemeIcon('plug');
 
   const podsNode = new MetricItem('Pods', vscode.TreeItemCollapsibleState.Expanded, [
@@ -125,15 +198,19 @@ function parseMetrics(output: string): MetricItem[] {
     ...crossplaneSummary,
     podsNode
   ]);
-  crossplaneSummaryNode.iconPath = new vscode.ThemeIcon('cloud');
+  crossplaneSummaryNode.iconPath = {
+    light: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-light.svg')),
+    dark: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-dark.svg'))
+  };
 
   // --- Cluster Node ---
-  // We'll use a placeholder and fetch real data asynchronously
-  const clusterNode = new MetricItem('Cluster', vscode.TreeItemCollapsibleState.Collapsed);
-  clusterNode.iconPath = new vscode.ThemeIcon('cloud');
-  clusterNode.children = [
-    (() => { const i = new MetricItem('Loading...', vscode.TreeItemCollapsibleState.None); i.iconPath = new vscode.ThemeIcon('sync~spin'); return i; })()
-  ];
+  const clusterIconBase = require('path').join(__dirname, '..', 'resources');
+  const clusterNode = new MetricItem('Cluster', vscode.TreeItemCollapsibleState.Expanded);
+  clusterNode.iconPath = {
+    light: vscode.Uri.file(require('path').join(clusterIconBase, 'cluster-light.svg')),
+    dark: vscode.Uri.file(require('path').join(clusterIconBase, 'cluster-dark.svg'))
+  };
+  clusterNode.children = parseClusterMetrics(output);
 
   // Return both nodes at the root
   return [

@@ -542,7 +542,11 @@ export class CrossplaneResource extends vscode.TreeItem {
             // It's a category node or the root
             switch (this.label) {
                 case 'XPExplorer':
-                    this.iconPath = new vscode.ThemeIcon('cloud');
+                    const iconBase = require('path').join(__dirname, '..', 'resources');
+                    this.iconPath = {
+                        light: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-light.svg')),
+                        dark: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-dark.svg'))
+                    };
                     break;
                 case 'managed':
                     this.iconPath = new vscode.ThemeIcon('server-process');
@@ -586,7 +590,11 @@ export class CrossplaneResource extends vscode.TreeItem {
                     break;
                 case 'crossplane':
                     if (this.resourceType && this.resourceType.startsWith('logs-')) {
-                        this.iconPath = new vscode.ThemeIcon('cloud');
+                        const iconBase = require('path').join(__dirname, '..', 'resources');
+                        this.iconPath = {
+                            light: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-light.svg')),
+                            dark: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-dark.svg'))
+                        };
                     }
                     break;
             }

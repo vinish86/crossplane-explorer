@@ -1488,9 +1488,17 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Register the metrics tree view
 	const metricsProvider = new CrossplaneMetricsTreeProvider();
+	const metricsTreeView = vscode.window.createTreeView('crossplaneMetricsTree', {
+		treeDataProvider: metricsProvider
+	});
+	context.subscriptions.push(metricsTreeView);
 	context.subscriptions.push(
 		vscode.window.registerTreeDataProvider('crossplaneMetricsTree', metricsProvider)
 	);
+
+	// Start metrics for both nodes on activation (eager fetching)
+	metricsProvider.startCrossplaneMetrics();
+	metricsProvider.startClusterMetrics();
 }
 
 // This method is called when your extension is deactivated
