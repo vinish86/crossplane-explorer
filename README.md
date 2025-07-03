@@ -4,7 +4,9 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 
 ## Features
 
-- **Tree View of Crossplane Resources**: Browse managed resources, composites, claims, compositions, CRDs, providers, and functions in a dedicated sidebar.
+- **Tree View of Crossplane Resources**: Browse managed resources, composites, claims, compositions, XRDs (CompositeResourceDefinitions), providers, and functions in a dedicated sidebar.
+- **Performance Panel (Live Metrics)**: The **Performance** panel provides live usage metrics for Crossplane pods (CPU, memory, and more) and lets you compare them with cluster node CPU usage. This gives you a fair idea of how much resource Crossplane is utilizing relative to your cluster, helping with troubleshooting and capacity planning.
+- **Delete with Confirmation**: Right-click any supported resource (including XRDs, compositions, providers, etc.) and select **Delete Resource**. You will always be prompted for confirmation before deletion, ensuring safety against accidental removal.
 - **YAML Editing**: Click any resource to open its YAML in a real file. Edit and save to apply changes directly to your cluster (like `kubectl edit`).
 - **Status at a Glance**: See resource health and sync status right in the explorer.
 - **One-Click Refresh**: Instantly refresh the resource list with the refresh button.
@@ -17,7 +19,7 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
   - **Restart Pod**: Deletes the pod for the selected provider/function; Kubernetes will automatically recreate it. Useful for troubleshooting or applying certain changes.
   - **Kill Pod**: Force deletes the pod immediately (with no graceful shutdown); the pod will be recreated, but any local data will be lost. Use with caution.
   - Both actions prompt for confirmation before proceeding, to prevent accidental disruption.
-- View and manage Crossplane resources (Claims, XRs, MRs, Providers, Functions, CRDs, Compositions, Configurations, DeploymentRuntimeConfigs) in a tree view
+- View and manage Crossplane resources (Claims, XRs, MRs, Providers, Functions, XRDs, Compositions, Configurations, DeploymentRuntimeConfigs) in a tree view
 
 ## Deployment Tree Structure: claim > XR > MR
 
@@ -64,6 +66,9 @@ Below is a screenshot showing the **Pause/Resume** and **Field Watch (Real-Time 
 ![Pause/Resume and Field Watch](resources/screenshots/pause-fieldwatch.png)
 
 *The screenshot demonstrates how you can right-click any XR or MR to pause/resume reconciliation or start/stop Field Watch for real-time diffs.*
+
+### XRDs (CompositeResourceDefinitions)
+The **XRDs** node lists all Crossplane CompositeResourceDefinitions (XRDs) in your cluster. You can expand this node to see each XRD, view its YAML, edit it, or delete it directly from the explorer. To delete, right-click an XRD and select **Delete Resource**—a confirmation dialog will always appear before deletion. The extension uses `kubectl get xrds` to list XRDs and `kubectl delete xrd <name>` to delete them. This makes it easy to manage your Crossplane XRDs without leaving VS Code.
 
 ### Configurations
 The **Configurations** node lists all Crossplane configuration packages installed in your cluster. You can expand this node to see each configuration and view its YAML details.
@@ -164,28 +169,6 @@ You can now deploy or undeploy your Crossplane composition files directly from t
 
 ---
 
-## Performance & Safety: Exclude Core CRDs
-
-To improve performance and reduce clutter, the extension allows you to exclude CRDs whose names end with certain suffixes (such as `crossplane.io`, `upbound.io`, `cattle.io`). This also helps prevent accidental editing of critical Crossplane, Upbound, or Rancher (cattle) CRDs.
-
-You can configure the excluded suffixes in your VS Code settings:
-
-- **Settings UI:**
-  1. Open Command Palette (`Cmd+Shift+P`/`Ctrl+Shift+P`), type `Preferences: Open Settings (UI)`.
-  2. Search for `Crossplane Explorer`.
-  3. Edit **CRD Suffixes to Exclude from the CRD List**.
-
-- **settings.json:**
-  ```json
-  "crossplaneExplorer.excludeCrdSuffixes": [
-    "crossplane.io",
-    "upbound.io",
-    "cattle.io"
-  ]
-  ```
-
-By default, these suffixes are excluded. You can customize this list to fit your needs.
-
 ## Requirements
 
 - [VS Code](https://code.visualstudio.com/)
@@ -223,3 +206,13 @@ spec:
 **Maintainer:** vinish soman
 
 For issues or feature requests, please open an issue on the project repository.
+
+## Performance Panel: Live Crossplane & Cluster Metrics
+
+The **Performance** panel in Crossplane Explorer shows real-time metrics for both Crossplane pods and your cluster nodes:
+
+- **Crossplane Usage**: See live CPU and memory usage for all Crossplane pods, including providers and functions.
+- **Cluster Comparison**: Instantly compare Crossplane's resource usage with overall cluster node CPU and memory, so you can gauge Crossplane's impact on your cluster.
+- **Auto-Refresh**: Metrics update every 5 seconds while the panel is open, giving you up-to-date insights.
+
+This makes it easy to monitor Crossplane's footprint and spot potential issues or bottlenecks at a glance.
