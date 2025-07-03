@@ -167,21 +167,26 @@ You can now deploy or undeploy your Crossplane composition files directly from t
 **How to use:**
 - Right-click any folder containing your composition files and select **Deploy** or **UnDeploy** from the context menu.
 
+## Performance Panel: Live Crossplane & Cluster Metrics
+
+The **Performance** panel in Crossplane Explorer shows real-time metrics for both Crossplane pods and your cluster nodes:
+
+- **Crossplane Usage**: See live CPU and memory usage for all Crossplane pods, including providers and functions.
+- **Cluster Comparison**: Instantly compare Crossplane's resource usage with overall cluster node CPU and memory, so you can gauge Crossplane's impact on your cluster.
+- **Auto-Refresh**: Metrics update every 5 seconds while the panel is open, giving you up-to-date insights.
+
+This makes it easy to monitor Crossplane's footprint and spot potential issues or bottlenecks at a glance.
+
+## Release Notes
+
+### 0.0.43
+- Initial release: resource browsing, YAML editing, status display, and more.
+
 ---
 
-## Requirements
+**Maintainer:** vinish soman
 
-- [VS Code](https://code.visualstudio.com/)
-- [kubectl](https://kubernetes.io/docs/tasks/tools/) installed and configured to access your Kubernetes cluster
-- [Crossplane](https://crossplane.io/) installed in your cluster
-- [Crossplane CLI](https://docs.crossplane.io/latest/getting-started/cli/) installed (required for CBT/trace feature)
-
-## Usage
-
-1. Open the **Crossplane Explorer** from the activity bar.
-2. Expand categories to see your Crossplane resources.
-3. Click any resource to view and edit its YAML. Save to apply changes directly to the cluster.
-4. Use the refresh button to update the view.
+For issues or feature requests, please open an issue on the project repository.
 
 ## Known Issues
 - Editing very large resources may be slow due to cluster/network latency.
@@ -195,24 +200,3 @@ spec:
   environment:
     ~ "dev111" → "dev112"
 ```
-
-## Release Notes
-
-### 0.0.39
-- Initial release: resource browsing, YAML editing, status display, and more.
-
----
-
-**Maintainer:** vinish soman
-
-For issues or feature requests, please open an issue on the project repository.
-
-## Performance Panel: Live Crossplane & Cluster Metrics
-
-The **Performance** panel in Crossplane Explorer shows real-time metrics for both Crossplane pods and your cluster nodes:
-
-- **Crossplane Usage**: See live CPU and memory usage for all Crossplane pods, including providers and functions.
-- **Cluster Comparison**: Instantly compare Crossplane's resource usage with overall cluster node CPU and memory, so you can gauge Crossplane's impact on your cluster.
-- **Auto-Refresh**: Metrics update every 5 seconds while the panel is open, giving you up-to-date insights.
-
-This makes it easy to monitor Crossplane's footprint and spot potential issues or bottlenecks at a glance.
