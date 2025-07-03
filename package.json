@@ -116,7 +116,11 @@
       "crossplane-explorer": [
         {
           "id": "crossplaneExplorer",
-          "name": ""
+          "name": "Crossplane Explorer"
+        },
+        {
+          "id": "crossplaneMetricsTree",
+          "name": "Performance"
         }
       ]
     },

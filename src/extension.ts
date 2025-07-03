@@ -13,6 +13,7 @@ import type { Change } from 'diff';
 import { createTwoFilesPatch } from 'diff';
 import { diff as deepDiff, Diff as DeepDiff } from 'deep-diff';
 import fetch from 'node-fetch'; // npm install node-fetch@2
+import { CrossplaneMetricsTreeProvider } from './metricsTreeProvider';
 
 const resourceToTempFileMap = new Map<string, string>();
 const tempFileToResourceMap = new Map<string, string>();
@@ -1484,7 +1485,104 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showInformationMessage('UnDeploy completed: xr.yaml (if present), composition.yaml, and definition.yaml deleted.');
 		})
 	);
+
+	// Register the metrics tree view
+	const metricsProvider = new CrossplaneMetricsTreeProvider();
+	context.subscriptions.push(
+		vscode.window.registerTreeDataProvider('crossplaneMetricsTree', metricsProvider)
+	);
 }
 
 // This method is called when your extension is deactivated
 export function deactivate() {}
+
+class CrossplaneMetricsWebviewProvider implements vscode.WebviewViewProvider {
+	private _view?: vscode.WebviewView;
+	private interval?: NodeJS.Timeout;
+
+	constructor(private readonly context: vscode.ExtensionContext) {}
+
+	resolveWebviewView(
+		webviewView: vscode.WebviewView,
+		context: vscode.WebviewViewResolveContext,
+		_token: vscode.CancellationToken
+	) {
+		this._view = webviewView;
+		webviewView.webview.options = { enableScripts: true };
+		webviewView.webview.html = this.getHtmlForWebview();
+
+		webviewView.onDidChangeVisibility(() => {
+			if (webviewView.visible) {
+				this.startMetricsUpdates();
+			} else {
+				this.stopMetricsUpdates();
+			}
+		});
+		if (webviewView.visible) {
+			this.startMetricsUpdates();
+		}
+	}
+
+	startMetricsUpdates() {
+		this.stopMetricsUpdates();
+		this.sendMetrics();
+		this.interval = setInterval(() => this.sendMetrics(), 5000);
+	}
+
+	stopMetricsUpdates() {
+		if (this.interval) clearInterval(this.interval);
+	}
+
+	async sendMetrics() {
+		if (!this._view) return;
+		const metrics = await new Promise<string>(resolve => {
+			require('child_process').exec('crossplane beta top -s', (err: Error | null, stdout: string, stderr: string) => {
+				if (err || stderr) resolve('');
+				else resolve(stdout);
+			});
+		});
+		const parsed = parseCrossplaneTopOutput(metrics);
+		this._view.webview.postMessage({ type: 'metrics', data: parsed });
+	}
+
+	getHtmlForWebview(): string {
+		const htmlPath = path.join(this.context.extensionPath, 'resources', 'metricsWebview.html');
+		return fs.readFileSync(htmlPath, 'utf8');
+	}
+}
+
+function parseCrossplaneTopOutput(output: string) {
+	const lines = output.trim().split('\n');
+	const summary = {
+		pods: lines[0]?.split(':')[1]?.trim() || '',
+		crossplane: lines[1]?.split(':')[1]?.trim() || '',
+		function: lines[2]?.split(':')[1]?.trim() || '',
+		provider: lines[3]?.split(':')[1]?.trim() || '',
+		memory: lines[4]?.split(':')[1]?.trim() || '',
+		cpu: lines[5]?.split(':')[1]?.trim() || '',
+	};
+	const tableStart = lines.findIndex(l => l.startsWith('TYPE'));
+	const rows = [];
+	for (let i = tableStart + 1; i < lines.length; i++) {
+		const l = lines[i].trim();
+		if (!l) continue;
+		const [type, namespace, ...rest] = l.split(/\s+/);
+		const name = rest.slice(0, rest.length - 2).join(' ');
+		const cpu = rest[rest.length - 2];
+		const memory = rest[rest.length - 1];
+		let icon = '';
+		if (type === 'crossplane') icon = '<span class="codicon codicon-cloud"></span>';
+		else if (type === 'provider') icon = '<span class="codicon codicon-plug"></span>';
+		else if (type === 'function') icon = '<span class="codicon codicon-symbol-function"></span>';
+		rows.push({
+			type,
+			icon,
+			namespace,
+			name,
+			nameShort: name.length > 25 ? name.slice(0, 22) + '...' : name,
+			cpu,
+			memory,
+		});
+	}
+	return { summary, rows };
+}
