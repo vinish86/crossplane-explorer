@@ -109,6 +109,16 @@ export class CrossplaneMetricsTreeProvider implements vscode.TreeDataProvider<Me
       return Promise.resolve(parseClusterMetrics(this.clusterMetrics));
     }
     if (element.label === 'Crossplane') {
+      if (!this.crossplaneMetrics.trim()) {
+        // Show a loading indicator if no data yet
+        return Promise.resolve([
+          (() => { 
+            const i = new MetricItem('Loading...', vscode.TreeItemCollapsibleState.None); 
+            i.iconPath = new vscode.ThemeIcon('sync~spin'); 
+            return i; 
+          })()
+        ]);
+      }
       return Promise.resolve(parseMetrics(this.crossplaneMetrics)[0].children || []);
     }
     return Promise.resolve(element.children || []);
