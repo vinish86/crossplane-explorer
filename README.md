@@ -169,13 +169,22 @@ You can now deploy or undeploy your Crossplane composition files directly from t
 
 ## Performance Panel: Live Crossplane & Cluster Metrics
 
-The **Performance** panel in Crossplane Explorer shows real-time metrics for both Crossplane pods and your cluster nodes:
+The **Performance** panel in Crossplane Explorer now features a flexible, user-driven monitoring workflow:
 
-- **Crossplane Usage**: See live CPU and memory usage for all Crossplane pods, including providers and functions.
-- **Cluster Comparison**: Instantly compare Crossplane's resource usage with overall cluster node CPU and memory, so you can gauge Crossplane's impact on your cluster.
-- **Auto-Refresh**: Metrics update every 5 seconds while the panel is open, giving you up-to-date insights.
+- **Monitoring Duration Selector**: At the top of the panel, choose how long to monitor metrics: **1 min, 5 min, 15 min, or 30 min**. Metrics polling and display only begin after you select a duration.
+- **Stop Monitoring Button**: While monitoring is active, a **Stop Monitoring** button appears. Click it to immediately stop metrics polling and clear the timer.
+- **Live Countdown**: The remaining monitoring time is shown and updates every second while active (e.g., `Active: 4 min 12 sec left`).
+- **Inactive State**: When monitoring is not active, the selector displays `Inactive`, and no metrics are shown or fetched.
+- **No Background Polling**: Metrics for Crossplane and Cluster nodes are only fetched and displayed while monitoring is active. Expanding these nodes when monitoring is inactive will show nothing and trigger no commands.
 
-This makes it easy to monitor Crossplane's footprint and spot potential issues or bottlenecks at a glance.
+**Usage Example:**
+1. Open the Performance panel.
+2. Click the monitor selector and choose a duration (e.g., 5 min).
+3. Metrics will begin polling and displaying for the selected time, with a live countdown.
+4. Click **Stop Monitoring** at any time to end monitoring early.
+5. When monitoring ends (either by timer or stop), the panel returns to the inactive state and metrics polling stops.
+
+This workflow ensures you have full control over when metrics are collected, avoids unnecessary background polling, and provides clear feedback on the monitoring state.
 
 ## Release Notes
 

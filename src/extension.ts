@@ -1496,6 +1496,17 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.registerTreeDataProvider('crossplaneMetricsTree', metricsProvider)
 	);
 
+	// Register the monitor duration command for the Performance panel
+	context.subscriptions.push(vscode.commands.registerCommand('crossplane-metrics.setMonitorDuration', async (provider: any) => {
+		const pick = await vscode.window.showQuickPick(['1', '5', '15', '30'], { placeHolder: 'Select monitoring duration (minutes)' });
+		if (pick) provider.setMonitorDuration(Number(pick));
+	}));
+
+	// Register the stop monitoring command for the Performance panel
+	context.subscriptions.push(vscode.commands.registerCommand('crossplane-metrics.stopMonitoring', (provider: any) => {
+		provider.stopMonitoring();
+	}));
+
 	// Start/stop metrics fetchers only on expand/collapse
 	metricsTreeView.onDidExpandElement(e => {
 		if (e.element.label === 'Crossplane') {

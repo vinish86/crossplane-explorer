@@ -12,11 +12,49 @@ export class CrossplaneMetricsTreeProvider implements vscode.TreeDataProvider<Me
   private clusterProc: ChildProcessWithoutNullStreams | null = null;
   private clusterInterval: NodeJS.Timeout | null = null;
   private crossplaneInterval: NodeJS.Timeout | null = null;
+  private monitorTimeout: NodeJS.Timeout | null = null;
+  private selectedDuration: number | null = null;
+  private monitorEndTime: number | null = null;
+  private remainingTimeInterval: NodeJS.Timeout | null = null;
 
   constructor() {}
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
+  }
+
+  setMonitorDuration(minutes: number) {
+    this.selectedDuration = minutes;
+    this.stopCrossplaneMetrics();
+    this.stopClusterMetrics();
+    if (this.monitorTimeout) {
+      clearTimeout(this.monitorTimeout);
+      this.monitorTimeout = null;
+    }
+    if (this.remainingTimeInterval) {
+      clearInterval(this.remainingTimeInterval);
+      this.remainingTimeInterval = null;
+    }
+    this.monitorEndTime = Date.now() + minutes * 60 * 1000;
+    this.startCrossplaneMetrics();
+    this.startClusterMetrics();
+    this.monitorTimeout = setTimeout(() => {
+      this.stopCrossplaneMetrics();
+      this.stopClusterMetrics();
+      vscode.window.showInformationMessage(`Performance monitoring stopped after ${minutes} minutes.`);
+      this.selectedDuration = null;
+      this.monitorEndTime = null;
+      if (this.remainingTimeInterval) {
+        clearInterval(this.remainingTimeInterval);
+        this.remainingTimeInterval = null;
+      }
+      this.refresh();
+    }, minutes * 60 * 1000);
+    // Start interval to update remaining time every second
+    this.remainingTimeInterval = setInterval(() => {
+      this.refresh();
+    }, 1000);
+    this.refresh();
   }
 
   // Called by the process handlers
@@ -94,29 +132,77 @@ export class CrossplaneMetricsTreeProvider implements vscode.TreeDataProvider<Me
     }
   }
 
+  stopMonitoring() {
+    this.stopCrossplaneMetrics();
+    this.stopClusterMetrics();
+    if (this.monitorTimeout) {
+      clearTimeout(this.monitorTimeout);
+      this.monitorTimeout = null;
+    }
+    if (this.remainingTimeInterval) {
+      clearInterval(this.remainingTimeInterval);
+      this.remainingTimeInterval = null;
+    }
+    this.selectedDuration = null;
+    this.monitorEndTime = null;
+    vscode.window.showInformationMessage('Performance monitoring stopped.');
+    this.refresh();
+  }
+
   getTreeItem(element: MetricItem): vscode.TreeItem {
     return element;
   }
 
   async getChildren(element?: MetricItem): Promise<MetricItem[]> {
     if (!element) {
-      // Root nodes
-      return parseMetrics(this.crossplaneMetrics);
+      // Add monitor duration selector at the top
+      const items: MetricItem[] = [];
+      const monitorSelector = new MetricItem('Monitor for: 1 min   5 min   15 min   30 min', vscode.TreeItemCollapsibleState.None);
+      monitorSelector.command = {
+        command: 'crossplane-metrics.setMonitorDuration',
+        title: 'Set Monitor Duration',
+        arguments: [this]
+      };
+      monitorSelector.iconPath = new vscode.ThemeIcon('watch');
+      if (this.selectedDuration && this.monitorEndTime) {
+        // Calculate remaining time
+        const msLeft = this.monitorEndTime - Date.now();
+        const min = Math.max(0, Math.floor(msLeft / 60000));
+        const sec = Math.max(0, Math.floor((msLeft % 60000) / 1000));
+        monitorSelector.description = `Active: ${min} min ${sec} sec left`;
+        // Add Stop Monitoring button
+        const stopItem = new MetricItem('Stop Monitoring', vscode.TreeItemCollapsibleState.None);
+        stopItem.command = {
+          command: 'crossplane-metrics.stopMonitoring',
+          title: 'Stop Monitoring',
+          arguments: [this]
+        };
+        stopItem.iconPath = new vscode.ThemeIcon('debug-stop');
+        items.push(stopItem);
+      } else {
+        monitorSelector.description = 'Inactive';
+      }
+      items.push(monitorSelector);
+      return [...items, ...parseMetrics(this.crossplaneMetrics)];
     }
     if (element.label === 'Cluster') {
+      // Only show metrics if monitoring is active
+      if (!(this.selectedDuration && this.monitorEndTime)) {
+        return [];
+      }
       if (!this.clusterMetrics.trim()) {
-        // Start the process if not already running
         this.startClusterMetrics();
-        // Return empty array; VS Code will show spinner
         return [];
       }
       return parseClusterMetrics(this.clusterMetrics);
     }
     if (element.label === 'Crossplane') {
+      // Only show metrics if monitoring is active
+      if (!(this.selectedDuration && this.monitorEndTime)) {
+        return [];
+      }
       if (!this.crossplaneMetrics.trim()) {
-        // Start the process if not already running
         this.startCrossplaneMetrics();
-        // Return empty array; VS Code will show spinner
         return [];
       }
       return parseMetrics(this.crossplaneMetrics)[0].children || [];
@@ -242,4 +328,10 @@ function parseClusterMetrics(output: string): MetricItem[] {
   return [
     (() => { const i = new MetricItem(summaryLine, vscode.TreeItemCollapsibleState.None); i.iconPath = new vscode.ThemeIcon('preview'); return i; })(),
   ];
-} 
+}
+
+// Register the command in your extension activation (in extension.ts):
+// context.subscriptions.push(vscode.commands.registerCommand('crossplane-metrics.setMonitorDuration', async (provider: CrossplaneMetricsTreeProvider) => {
+//   const pick = await vscode.window.showQuickPick(['5', '15', '30'], { placeHolder: 'Select monitoring duration (minutes)' });
+//   if (pick) provider.setMonitorDuration(Number(pick));
+// })); 
