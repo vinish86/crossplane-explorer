@@ -10,10 +10,14 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
     private _onDidChangeTreeData: vscode.EventEmitter<CrossplaneResource | undefined | null | void> = new vscode.EventEmitter<CrossplaneResource | undefined | null | void>();
     readonly onDidChangeTreeData: vscode.Event<CrossplaneResource | undefined | null | void> = this._onDidChangeTreeData.event;
 
+    private allResources: any[] | null = null;
+    private loading: boolean = false;
+
     constructor() {
     }
 
     refresh(): void {
+        this.allResources = null;
         this._onDidChangeTreeData.fire();
     }
 
@@ -22,7 +26,44 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
     }
 
     async getChildren(element?: CrossplaneResource): Promise<CrossplaneResource[]> {
+        // --- PRELOAD ALL OBJECTS ON FIRST XPExplorer EXPANSION ---
+        const multiResourceTypes = [
+            'environmentconfigs',
+            'compositions',
+            'configurations',
+            'deploymentruntimeconfigs',
+            'compositeresourcedefinitions',
+            'providers',
+            'functions',
+            'providerconfigs'
+        ];
         if (!element) {
+            // Preload all objects if not already loaded
+            if (!this.allResources && !this.loading) {
+                try {
+                    const resourceMap: Record<string, string> = {
+                        environmentconfigs: 'environmentconfigs.apiextensions.crossplane.io',
+                        compositions: 'compositions.apiextensions.crossplane.io',
+                        configurations: 'configurations.pkg.crossplane.io',
+                        deploymentruntimeconfigs: 'deploymentruntimeconfigs.pkg.crossplane.io',
+                        compositeresourcedefinitions: 'compositeresourcedefinitions.apiextensions.crossplane.io',
+                        providers: 'providers.pkg.crossplane.io',
+                        functions: 'functions.pkg.crossplane.io',
+                        providerconfigs: 'providerconfigs'
+                    };
+                    const kubectlArg = Object.values(resourceMap).join(',');
+                    const { stdout } = await executeCommand('kubectl', [
+                        'get', kubectlArg, '-o', 'json'
+                    ]);
+                    const result = JSON.parse(stdout);
+                    this.allResources = result.items || [];
+                } catch (err: any) {
+                    vscode.window.showErrorMessage(`Error fetching resources: ${err.message}`);
+                    this.allResources = [];
+                } finally {
+                    this.loading = false;
+                }
+            }
             return Promise.resolve([
                 new CrossplaneResource('XPExplorer', vscode.TreeItemCollapsibleState.Expanded)
             ]);
@@ -187,12 +228,6 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                         title: 'View Resource YAML',
                         arguments: [node]
                     };
-                    console.log('[DEBUG] Set .command for claim node:', {
-                        label,
-                        resourceType,
-                        name,
-                        namespace
-                    });
                     return node;
                 });
             } catch (err: any) {
@@ -325,207 +360,82 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
             }
         }
         
-        if (element.label === 'configurations') {
-            try {
-                const { stdout } = await executeCommand('kubectl', [
-                    'get', 'configurations.pkg.crossplane.io', '-o', 'json'
-                ]);
-                const result = JSON.parse(stdout);
-                if (!result.items || result.items.length === 0) {
-                    return [];
-                }
-                return result.items.map((item: any) => {
-                    const name = item.metadata.name;
-                    const namespace = item.metadata.namespace;
-                    const label = `${name}${namespace ? ' (' + namespace + ')' : ''}`;
-                    const node = new CrossplaneResource(
-                        label,
-                        vscode.TreeItemCollapsibleState.None,
-                        'configurations.pkg.crossplane.io',
-                        name,
-                        namespace
-                    );
-                    node.command = {
-                        command: 'crossplane-explorer.viewResource',
-                        title: 'View Resource YAML',
-                        arguments: [node]
-                    };
-                    node.contextValue = 'configuration';
-                    return node;
-                });
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Error fetching configurations: ${err.message}`);
+        // --- SINGLE KUBECTL GET FOR ALL RESOURCE TYPES ---
+        if (multiResourceTypes.includes(element.label === 'xrds' ? 'compositeresourcedefinitions' : element.label)) {
+            // If still loading, show nothing (spinner)
+            if (this.loading) {
                 return [];
             }
-        }
-        
-        if (element.label === 'deploymentruntimeconfigs') {
-            try {
-                const { stdout } = await executeCommand('kubectl', [
-                    'get', 'deploymentruntimeconfigs.pkg.crossplane.io', '-o', 'json'
-                ]);
-                const result = JSON.parse(stdout);
-                if (!result.items || result.items.length === 0) {
-                    return [];
+            // Filter items for the current resource type
+            let filteredItems = (this.allResources || []).filter((item: any) => {
+                if (element.label === 'xrds' || element.label === 'compositeresourcedefinitions') {
+                    return item.kind === 'CompositeResourceDefinition';
                 }
-                return result.items.map((item: any) => {
-                    const name = item.metadata.name;
-                    const namespace = item.metadata.namespace;
-                    const label = `${name}${namespace ? ' (' + namespace + ')' : ''}`;
-                    const node = new CrossplaneResource(
-                        label,
-                        vscode.TreeItemCollapsibleState.None,
-                        'deploymentruntimeconfigs.pkg.crossplane.io',
-                        name,
-                        namespace
-                    );
-                    node.command = {
-                        command: 'crossplane-explorer.viewResource',
-                        title: 'View Resource YAML',
-                        arguments: [node]
-                    };
-                    node.contextValue = 'deploymentruntimeconfig';
-                    return node;
-                });
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Error fetching deploymentruntimeconfigs: ${err.message}`);
+                if (element.label === 'providerconfigs') {
+                    return item.kind === 'ProviderConfig';
+                }
+                if (element.label === 'functions') {
+                    return item.kind === 'Function';
+                }
+                if (element.label === 'providers') {
+                    return item.kind === 'Provider';
+                }
+                if (element.label === 'deploymentruntimeconfigs') {
+                    return item.kind === 'DeploymentRuntimeConfig';
+                }
+                if (element.label === 'configurations') {
+                    return item.kind === 'Configuration';
+                }
+                if (element.label === 'compositions') {
+                    return item.kind === 'Composition';
+                }
+                if (element.label === 'environmentconfigs') {
+                    return item.kind === 'EnvironmentConfig';
+                }
+                return false;
+            });
+            if (filteredItems.length === 0) {
                 return [];
             }
-        }
-        
-        if (element.label === 'environmentconfigs') {
-            try {
-                const { stdout } = await executeCommand('kubectl', [
-                    'get', 'environmentconfigs.apiextensions.crossplane.io', '-o', 'json'
-                ]);
-                const result = JSON.parse(stdout);
-                if (!result.items || result.items.length === 0) {
-                    return [];
-                }
-                return result.items.map((item: any) => {
-                    const name = item.metadata.name;
-                    const namespace = item.metadata.namespace;
-                    const label = `${name}${namespace ? ' (' + namespace + ')' : ''}`;
-                    const node = new CrossplaneResource(
-                        label,
-                        vscode.TreeItemCollapsibleState.None,
-                        'environmentconfigs.apiextensions.crossplane.io',
-                        name,
-                        namespace
-                    );
-                    node.command = {
-                        command: 'crossplane-explorer.viewResource',
-                        title: 'View Resource YAML',
-                        arguments: [node]
-                    };
-                    node.contextValue = 'environmentconfig';
-                    return node;
-                });
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Error fetching environmentconfigs: ${err.message}`);
-                return [];
-            }
-        }
-        
-        if (element.label === 'providerconfigs') {
-            try {
-                const { stdout } = await executeCommand('kubectl', [
-                    'get', 'providerconfigs', '-o', 'json'
-                ]);
-                const result = JSON.parse(stdout);
-                if (!result.items || result.items.length === 0) {
-                    return [];
-                }
-                return result.items.map((item: any) => {
-                    const name = item.metadata.name;
-                    const namespace = item.metadata.namespace;
-                    const label = `${name}${namespace ? ' (' + namespace + ')' : ''}`;
-                    const node = new CrossplaneResource(
-                        label,
-                        vscode.TreeItemCollapsibleState.None,
-                        'providerconfigs',
-                        name,
-                        namespace
-                    );
-                    node.command = {
-                        command: 'crossplane-explorer.viewResource',
-                        title: 'View Resource YAML',
-                        arguments: [node]
-                    };
-                    node.contextValue = 'providerconfig';
-                    node.iconPath = new vscode.ThemeIcon('unfold');
-                    return node;
-                });
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Error fetching providerconfigs: ${err.message}`);
-                return [];
-            }
-        }
-        
-        if (element.label === 'compositions') {
-            try {
-                const { stdout } = await executeCommand('kubectl', [
-                    'get', 'compositions', '-o', 'json'
-                ]);
-                const result = JSON.parse(stdout);
-                if (!result.items || result.items.length === 0) {
-                    return [];
-                }
-                return result.items.map((item: any) => {
-                    const name = item.metadata.name;
-                    const namespace = item.metadata.namespace;
-                    const label = `${name}${namespace ? ' (' + namespace + ')' : ''}`;
-                    const node = new CrossplaneResource(
-                        label,
-                        vscode.TreeItemCollapsibleState.None,
-                        'compositions',
-                        name,
-                        namespace
-                    );
-                    node.command = {
-                        command: 'crossplane-explorer.viewResource',
-                        title: 'View Resource YAML',
-                        arguments: [node]
-                    };
-                    node.contextValue = 'composition';
-                    return node;
-                });
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Error fetching compositions: ${err.message}`);
-                return [];
-            }
-        }
-        
-        if (element.label === 'xrds') {
-            try {
-                const { stdout } = await executeCommand('kubectl', [
-                    'get', 'xrds', '-o', 'json'
-                ]);
-                const result = JSON.parse(stdout);
-                if (!result.items || result.items.length === 0) {
-                    return [];
-                }
-                return result.items.map((item: any) => {
-                    const name = item.metadata.name;
-                    const node = new CrossplaneResource(
-                        name,
-                        vscode.TreeItemCollapsibleState.None,
-                        'xrd',
-                        name
-                    );
-                    node.command = {
-                        command: 'crossplane-explorer.viewResource',
-                        title: 'View Resource YAML',
-                        arguments: [node]
-                    };
+            // Map to CrossplaneResource nodes
+            return filteredItems.map((item: any) => {
+                const name = item.metadata.name;
+                const namespace = item.metadata.namespace;
+                const label = `${name}${namespace ? ' (' + namespace + ')' : ''}`;
+                const node = new CrossplaneResource(
+                    label,
+                    vscode.TreeItemCollapsibleState.None,
+                    element.label === 'xrds' ? 'compositeresourcedefinitions' : element.label,
+                    name,
+                    namespace
+                );
+                node.command = {
+                    command: 'crossplane-explorer.viewResource',
+                    title: 'View Resource YAML',
+                    arguments: [node]
+                };
+                // Set contextValue and iconPath as before
+                if (element.label === 'xrds' || element.label === 'compositeresourcedefinitions') {
                     node.contextValue = 'xrd';
                     node.iconPath = new vscode.ThemeIcon('symbol-structure');
-                    return node;
-                });
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Error fetching xrds: ${err.message}`);
-                return [];
-            }
+                } else if (element.label === 'providerconfigs') {
+                    node.contextValue = 'providerconfig';
+                    node.iconPath = new vscode.ThemeIcon('unfold');
+                } else if (element.label === 'compositions') {
+                    node.contextValue = 'composition';
+                } else if (element.label === 'providers') {
+                    node.contextValue = 'provider';
+                } else if (element.label === 'functions') {
+                    node.contextValue = 'function';
+                } else if (element.label === 'deploymentruntimeconfigs') {
+                    node.contextValue = 'deploymentruntimeconfig';
+                } else if (element.label === 'configurations') {
+                    node.contextValue = 'configuration';
+                } else if (element.label === 'environmentconfigs') {
+                    node.contextValue = 'environmentconfig';
+                }
+                return node;
+            });
         }
         
         try {
