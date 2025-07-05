@@ -29,6 +29,13 @@ const fieldWatchOutputMap = new Map<string, vscode.OutputChannel>();
 // Add at the top of the file, after imports:
 const activeLogChannels = new Set<vscode.OutputChannel>();
 
+// Module-level variable to persist the YAML Lint output channel
+let yamllintOutputChannel: vscode.OutputChannel | undefined;
+
+// Module-level variables to persist output channels for Render Test and Schema Validation
+let renderTestOutputChannel: vscode.OutputChannel | undefined;
+let schemaValidationOutputChannel: vscode.OutputChannel | undefined;
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -863,8 +870,12 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 			const folderPath = uri.fsPath;
-			const output = vscode.window.createOutputChannel('Crossplane Render Test');
-			output.show(true);
+			if (!renderTestOutputChannel) {
+				renderTestOutputChannel = vscode.window.createOutputChannel('Crossplane Render Test');
+			}
+			renderTestOutputChannel.clear();
+			renderTestOutputChannel.show(true);
+			const output = renderTestOutputChannel;
 
 			// Only run crossplane render and save to renderTestOutput.yaml
 			const renderArgs = [
@@ -949,8 +960,12 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 			const folderPath = uri.fsPath;
-			const output = vscode.window.createOutputChannel('Crossplane Schema Validation');
-			output.show(true);
+			if (!schemaValidationOutputChannel) {
+				schemaValidationOutputChannel = vscode.window.createOutputChannel('Crossplane Schema Validation');
+			}
+			schemaValidationOutputChannel.clear();
+			schemaValidationOutputChannel.show(true);
+			const output = schemaValidationOutputChannel;
 
 			// Download and merge CRDs
 			await downloadAndMergeCrds(folderPath, output);
@@ -1559,6 +1574,75 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showErrorMessage(`Failed to delete: ${err.message}`);
 		}
 	}));
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('crossplaneExplorer.yamllint', async (uri: vscode.Uri) => {
+			if (!uri || !uri.fsPath) {
+				vscode.window.showErrorMessage('No folder selected. Please right-click a folder to run YAML Lint.');
+				return;
+			}
+			const folderPath = uri.fsPath;
+			const config = vscode.workspace.getConfiguration('crossplaneExplorer');
+			const dockerImage = config.get<string>('yamllintDockerImage', 'registry.gitlab.com/pipeline-components/yamllint:latest');
+			if (!yamllintOutputChannel) {
+				yamllintOutputChannel = vscode.window.createOutputChannel('YAML Lint');
+			}
+			yamllintOutputChannel!.clear();
+			yamllintOutputChannel!.show(true);
+			yamllintOutputChannel!.appendLine(`YAML Lint`);
+			yamllintOutputChannel!.appendLine(`✅ Pulling image: ${dockerImage}`);
+			yamllintOutputChannel!.appendLine(`✅ Running yamllint on composition.yaml and definition.yaml\n`);
+
+			const filesToLint = ['composition.yaml', 'definition.yaml']
+				.map(f => require('path').join(folderPath, f))
+				.filter(require('fs').existsSync);
+			if (filesToLint.length === 0) {
+				yamllintOutputChannel!.appendLine('No composition.yaml or definition.yaml found in the selected folder.');
+				return;
+			}
+
+			const filesArg = filesToLint.map(f => `/code/${require('path').basename(f)}`).join(' ');
+			const cmd = `docker run --rm -v "${folderPath}:/code" ${dockerImage} yamllint ${filesArg}`;
+			yamllintOutputChannel!.appendLine(`$ ${cmd}\n`);
+
+			const cp = require('child_process');
+			cp.exec(cmd, { cwd: folderPath }, (err: any, stdout: string, stderr: string) => {
+				let message = '';
+				let isSuccess = false;
+				if (!stdout && !stderr) {
+					yamllintOutputChannel!.appendLine('✅ yamllint: composition.yaml and definition.yaml meet YAML syntax and style standards.');
+					message = 'yamllint: composition.yaml and definition.yaml meet YAML syntax and style standards.';
+					isSuccess = true;
+				} else {
+					if (stdout) yamllintOutputChannel!.appendLine(stdout);
+					if (stderr) yamllintOutputChannel!.appendLine(stderr);
+					if (err) {
+						if (stderr && stderr.includes('docker: command not found')) {
+							message = 'Docker is not installed or not available in PATH. Please install Docker to use YAML Lint.';
+						} else {
+							message = 'YAML Lint completed with errors. See output for details.';
+						}
+					} else {
+						message = 'YAML Lint completed. See output for details.';
+					}
+				}
+
+				// Show notification with a 'Close Output' button
+				vscode.window.showInformationMessage(message, 'Close Output').then(selection => {
+					if (selection === 'Close Output') {
+						yamllintOutputChannel!.dispose();
+					}
+				});
+
+				// Auto-close after 2 minutes if not already closed
+				setTimeout(() => {
+					if ((yamllintOutputChannel as any)._disposed !== true) {
+						yamllintOutputChannel!.dispose();
+					}
+				}, 2 * 60 * 1000);
+			});
+		})
+	);
 }
 
 // This method is called when your extension is deactivated
@@ -1654,3 +1738,4 @@ function parseCrossplaneTopOutput(output: string) {
 	}
 	return { summary, rows };
 }
+

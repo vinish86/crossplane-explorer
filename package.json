@@ -105,6 +105,10 @@
       {
         "command": "crossplane-explorer.deleteResource",
         "title": "Delete Resource"
+      },
+      {
+        "command": "crossplaneExplorer.yamllint",
+        "title": "YAML Lint"
       }
     ],
     "viewsContainers": {
@@ -220,6 +224,10 @@
           "group": "navigation@2"
         },
         {
+          "command": "crossplaneExplorer.yamllint",
+          "group": "navigation@2.5"
+        },
+        {
           "command": "crossplaneExplorer.schemaValidation",
           "group": "navigation@3"
         },
@@ -245,6 +253,11 @@
             "cattle.io"
           ],
           "description": "CRD suffixes to exclude from the CRD list."
+        },
+        "crossplaneExplorer.yamllintDockerImage": {
+          "type": "string",
+          "default": "registry.gitlab.com/pipeline-components/yamllint:latest",
+          "description": "Docker image to use for yamllint linting."
         }
       }
     },
@@ -268,7 +281,8 @@
     "deep-diff": "^1.0.2",
     "diff": "^8.0.2",
     "js-yaml": "^4.1.0",
-    "strip-ansi": "^7.1.0"
+    "strip-ansi": "^7.1.0",
+    "yaml-lint": "^1.7.0"
   },
   "devDependencies": {
     "@types/deep-diff": "^1.0.5",
