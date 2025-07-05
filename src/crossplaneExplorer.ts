@@ -263,7 +263,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                 }
 
                 // Create claim nodes at the root (only those referenced by a composite)
-                return Array.from(claimsMap.values()).map(({ claimRef, composites }) => {
+                const claimNodes = Array.from(claimsMap.values()).map(({ claimRef, composites }) => {
                     const kind = claimRef.kind;
                     const apiVersion = claimRef.apiVersion || '';
                     const group = apiVersion.split('/')[0] || '';
@@ -287,6 +287,37 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     (claimNode as any)._childComposites = composites;
                     return claimNode;
                 });
+
+                // Find parent XRs (composites) with no claimRef and no ownerReferences
+                const parentXRs = result.items.filter((item: any) =>
+                    !item.spec?.claimRef &&
+                    (!item.metadata?.ownerReferences || item.metadata.ownerReferences.length === 0)
+                );
+                const parentXRNodes = parentXRs.map((item: any) => {
+                    const name = item.metadata.name || '';
+                    const kind = item.kind || '';
+                    const apiVersion = item.apiVersion || '';
+                    const group = apiVersion.split('/')[0] || '';
+                    const resourceType = group ? `${kind.toLowerCase()}.${group}` : kind.toLowerCase();
+                    const label = `[XR] | ${kind} | ${name}`;
+                    const node = new CrossplaneResource(
+                        label,
+                        vscode.TreeItemCollapsibleState.Collapsed,
+                        resourceType,
+                        name,
+                        '' // composites are cluster-scoped
+                    );
+                    node.contextValue = 'composite-xr';
+                    node.command = {
+                        command: 'crossplane-explorer.viewResource',
+                        title: 'View Resource YAML',
+                        arguments: [node]
+                    };
+                    return node;
+                });
+
+                // Return both claim nodes and parent XR nodes
+                return [...claimNodes, ...parentXRNodes];
             } catch (err: any) {
                 vscode.window.showErrorMessage(`Error fetching composites: ${err.message}`);
                 return [];
