@@ -103,7 +103,7 @@ Both actions will show a confirmation dialog before proceeding:
 
 > **Note:** These options are only available when you right-click on an individual provider or function resource, not on the category folders.
 
-## Composition Init & Render Test (Ultra-Fast Composition Prototyping)
+## Composition Init, YAML Lint & Render Test (Ultra-Fast Composition Prototyping)
 
 Crossplane Explorer makes it ultra-fast and convenient to create and test Crossplane composition skeletons directly from the VSCode File Explorer:
 
@@ -118,7 +118,23 @@ Crossplane Explorer makes it ultra-fast and convenient to create and test Crossp
 
   ![Composition Init](resources/screenshots/composition-init.png)
 
-- **Render Test**: After editing your skeleton files, right-click the same folder and select **Crossplane Explorer → Render Test**. This will run a local render using the Crossplane CLI:
+- **YAML Lint**: After editing your skeleton files, right-click the same folder and select **Crossplane Explorer → YAML Lint**. This will check both `composition.yaml` and `definition.yaml` for YAML syntax and style issues using [yamllint](https://yamllint.readthedocs.io/) running in a Docker container (no Python required on your machine). The output will clearly indicate if your files meet YAML standards or show any issues found. You can close the output tab when done.
+
+  - The Docker image used for yamllint is configurable via the extension settings (`crossplaneExplorer.yamllintDockerImage`).
+  - Only `composition.yaml` and `definition.yaml` in the selected folder are checked (not recursively).
+  - You must have Docker running on your host machine for this feature to work.
+
+  Example output:
+  ```
+  YAML Lint
+  ✅ Pulling image: registry.gitlab.com/pipeline-components/yamllint:latest
+  ✅ Running yamllint on composition.yaml and definition.yaml
+  ✅ yamllint: composition.yaml and definition.yaml meet YAML syntax and style standards.
+  ```
+
+  If there are issues, they will be shown in the output channel with details.
+
+- **Render Test**: After linting and editing your skeleton files, right-click the same folder and select **Crossplane Explorer → Render Test**. This will run a local render using the Crossplane CLI:
 
   ```sh
   crossplane render xr.yaml composition.yaml function.yaml --observed-resources=observedResources.yaml --extra-resources=extraResources.yaml --context-files apiextensions.crossplane.io/environment=environmentConfig.json --function-credentials=function-creds.yaml
@@ -188,7 +204,7 @@ This workflow ensures you have full control over when metrics are collected, avo
 
 ## Release Notes
 
-### 0.0.43
+### 0.0.51
 - Initial release: resource browsing, YAML editing, status display, and more.
 
 ---
