@@ -1643,6 +1643,69 @@ export function activate(context: vscode.ExtensionContext) {
 			});
 		})
 	);
+
+	// Add a status bar button for 'Apply'
+	const applyStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+	applyStatusBarItem.text = '$(cloud-upload) kapply';
+	applyStatusBarItem.tooltip = 'kubectl apply -f <current YAML file> (kapply)';
+	applyStatusBarItem.command = 'crossplaneExplorer.applyCurrentYaml';
+	applyStatusBarItem.show();
+	context.subscriptions.push(applyStatusBarItem);
+
+	// Add a status bar button for 'Delete'
+	const deleteStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+	deleteStatusBarItem.text = '$(trash) kdelete';
+	deleteStatusBarItem.tooltip = 'kubectl delete -f <current YAML file> (kdelete)';
+	deleteStatusBarItem.command = 'crossplaneExplorer.deleteCurrentYaml';
+	deleteStatusBarItem.show();
+	context.subscriptions.push(deleteStatusBarItem);
+
+	context.subscriptions.push(vscode.commands.registerCommand('crossplaneExplorer.applyCurrentYaml', async () => {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor || !editor.document || !editor.document.fileName.endsWith('.yaml')) {
+			vscode.window.showWarningMessage('No YAML file is currently open.');
+			return;
+		}
+		const filePath = editor.document.fileName;
+		const cp = require('child_process');
+		cp.exec(`kubectl apply -f "${filePath}"`, (err: any, stdout: string, stderr: string) => {
+			if (err) {
+				vscode.window.showErrorMessage(`kubectl apply failed: ${stderr || err.message}`);
+			} else {
+				let message = `Successfully applied: ${filePath}`;
+				if (stdout && stdout.trim().length > 0) {
+					message += `\n${stdout.trim()}`;
+				}
+				vscode.window.showInformationMessage(message);
+			}
+		});
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('crossplaneExplorer.deleteCurrentYaml', async () => {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor || !editor.document || !editor.document.fileName.endsWith('.yaml')) {
+			vscode.window.showWarningMessage('No YAML file is currently open.');
+			return;
+		}
+		const filePath = editor.document.fileName;
+		const cp = require('child_process');
+		cp.exec(`kubectl delete -f "${filePath}"`, (err: any, stdout: string, stderr: string) => {
+			console.log('[kdelete callback]', { err, stdout, stderr }); // Debug log
+			if (err) {
+				vscode.window.showErrorMessage(`kubectl delete failed: ${stderr || err.message}`);
+			} else {
+				let message = `Successfully deleted: ${filePath}`;
+				if (stdout && stdout.trim().length > 0) {
+					message += `\n${stdout.trim()}`;
+				} else if (stderr && stderr.trim().length > 0) {
+					message += `\n${stderr.trim()}`;
+				} else {
+					message += '\n(kubectl returned no output)';
+				}
+				vscode.window.showInformationMessage(message);
+			}
+		});
+	}));
 }
 
 // This method is called when your extension is deactivated

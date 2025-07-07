@@ -10,6 +10,7 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 - **YAML Editing**: Click any resource to open its YAML in a real file. Edit and save to apply changes directly to your cluster (like `kubectl edit`).
 - **Status at a Glance**: See resource health and sync status right in the explorer.
 - **One-Click Refresh**: Instantly refresh the resource list with the refresh button.
+- **kapply & kdelete Status Bar Buttons**: Instantly apply or delete the currently open YAML file using the status bar buttons at the bottom right of VS Code. The **kapply** button (cloud upload icon) runs `kubectl apply -f <current YAML file>`, and the **kdelete** button (trash icon) runs `kubectl delete -f <current YAML file>`. Both actions show a notification with the result.
 - **Beautiful Icons**: Each resource type has a clear, modern icon for easy navigation.
 - **CBT/Trace on XR**: Right-click any XR (composite resource) under deployment-flow and select **CBT** to run `crossplane beta trace` and view XR status in a tabular format in the Output panel.
 - **Field Watch (Real-Time Diff)**: Right-click any XR or MR under deployment-flow and select **Start Field Watch** to see real-time, field-level diffs for resource changes. You can also select **Stop Field Watch** to stop watching that resource. Both options are always available in the context menu, and you can run multiple Field Watches concurrently. The extension will handle duplicate start/stop requests gracefully. Powered by the Kubernetes JS client, this feature shows a clean, YAML-like diff output for every change, with no off-by-one or noisy metadata. Only meaningful changes are shown, making it easy to track resource evolution live.
@@ -225,3 +226,10 @@ spec:
   environment:
     ~ "dev111" → "dev112"
 ```
+
+### kapply & kdelete Usage
+
+- Open any YAML file in the editor.
+- Click the **kapply** (cloud upload) button in the status bar to apply the file to your cluster.
+- Click the **kdelete** (trash) button in the status bar to delete the resource defined in the file from your cluster.
+- You will always receive a notification with the result of the action, including any output from kubectl.
