@@ -95,6 +95,7 @@ export function activate(context: vscode.ExtensionContext) {
             ) {
                 getArgs = ['get', resourceType, resource.resourceName];
             } else if (resourceType && resourceType.includes('.') && resource.resourceName) {
+                // Use <resourceType>/<resourceName> for dotted resource types (e.g., providerconfigs.azure.upbound.io)
                 getArgs = ['get', `${resourceType}/${resource.resourceName}`];
             } else {
                 getArgs = ['get', resourceType, resource.resourceName];

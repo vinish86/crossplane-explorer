@@ -391,6 +391,67 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
             }
         }
         
+        // --- PROVIDERCONFIGS DYNAMIC CATEGORY TREE ---
+        if (element && element.label === 'providerconfigs') {
+            // Discover all providerconfig resource types
+            try {
+                const { stdout } = await executeCommand('kubectl', [
+                    'api-resources', '--verbs=list', '--namespaced=false', '-o', 'name'
+                ]);
+                const lines = stdout.split('\n').filter((l: string) => l.startsWith('providerconfigs.'));
+                // Map to categories
+                const categories: { [key: string]: string } = {};
+                for (const line of lines) {
+                    if (line.includes('aws')) categories['aws'] = line;
+                    else if (line.includes('azure')) categories['azure'] = line;
+                    else if (line.includes('kubernetes')) categories['kubernetes'] = line;
+                    else if (line.includes('tf')) categories['tf'] = line;
+                    else {
+                        // fallback: use the suffix after providerconfigs.
+                        const suffix = line.split('providerconfigs.')[1] || 'other';
+                        categories[suffix] = line;
+                    }
+                }
+                // Return a node for each category
+                return Object.keys(categories).map(cat => {
+                    const node = new CrossplaneResource(cat, vscode.TreeItemCollapsibleState.Collapsed, `providerconfigs-category`, categories[cat]);
+                    node.iconPath = new vscode.ThemeIcon('cloud');
+                    node.contextValue = 'providerconfigs-category';
+                    return node;
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error discovering providerconfig categories: ${err.message}`);
+                return [];
+            }
+        }
+        // Handle expanding a providerconfigs category node
+        if (element && element.resourceType === 'providerconfigs-category' && element.resourceName) {
+            // element.resourceName is the full resource type, e.g., providerconfigs.aws.upbound.io
+            try {
+                const { stdout } = await executeCommand('kubectl', [
+                    'get', element.resourceName, '-o', 'json'
+                ]);
+                const result = JSON.parse(stdout);
+                if (!result.items || result.items.length === 0) return [];
+                return result.items.map((item: any) => {
+                    const name = item.metadata.name;
+                    const label = name;
+                    // Set resourceType to the full resource type for correct kubectl get
+                    const node = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, element.resourceName, name);
+                    node.contextValue = 'providerconfig';
+                    node.iconPath = new vscode.ThemeIcon('cloud');
+                    node.command = {
+                        command: 'crossplane-explorer.viewResource',
+                        title: 'View Resource YAML',
+                        arguments: [node]
+                    };
+                    return node;
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching providerconfigs for ${element.label}: ${err.message}`);
+                return [];
+            }
+        }
         // --- SINGLE KUBECTL GET FOR ALL RESOURCE TYPES ---
         if (multiResourceTypes.includes(element.label === 'xrds' ? 'compositeresourcedefinitions' : element.label)) {
             // If still loading, show nothing (spinner)
