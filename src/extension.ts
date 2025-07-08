@@ -1159,6 +1159,34 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('crossplaneExplorer.restartPod', async (resource: any) => {
+			// Support direct pod restart for crossplane-pod context
+			if (resource.contextValue === 'crossplane-pod') {
+				const podName = resource.resourceName;
+				const namespace = resource.namespace;
+				if (!podName || !namespace) {
+					vscode.window.showErrorMessage('Pod name or namespace missing.');
+					return;
+				}
+				const restart = await vscode.window.showWarningMessage(
+					`Are you sure you want to restart the pod "${podName}" in namespace "${namespace}"?\n\nThis will cause a brief interruption in service.`,
+					{ modal: true },
+					'Restart Pod'
+				);
+				if (restart !== 'Restart Pod') return;
+				try {
+					const { stderr } = await executeCommand('kubectl', [
+						'delete', 'pod', podName, '-n', namespace
+					]);
+					if (stderr && !stderr.includes('deleted')) {
+						vscode.window.showErrorMessage(`Failed to restart pod: ${stderr}`);
+						return;
+					}
+					vscode.window.showInformationMessage(`Successfully restarted pod "${podName}" in namespace "${namespace}"`);
+				} catch (err: any) {
+					vscode.window.showErrorMessage(`Failed to restart pod: ${err.message}`);
+				}
+				return;
+			}
 			const podInfo = await getPodNameForProviderOrFunction(resource);
 			if (!podInfo) return;
 
@@ -1196,6 +1224,34 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('crossplaneExplorer.killPod', async (resource: any) => {
+			// Support direct pod kill for crossplane-pod context
+			if (resource.contextValue === 'crossplane-pod') {
+				const podName = resource.resourceName;
+				const namespace = resource.namespace;
+				if (!podName || !namespace) {
+					vscode.window.showErrorMessage('Pod name or namespace missing.');
+					return;
+				}
+				const kill = await vscode.window.showWarningMessage(
+					`Are you sure you want to KILL the pod "${podName}" in namespace "${namespace}"?\n\n⚠️  WARNING: This will permanently delete the pod. The pod will be recreated by the deployment, but any local data will be lost.`,
+					{ modal: true },
+					'Kill Pod'
+				);
+				if (kill !== 'Kill Pod') return;
+				try {
+					const { stderr } = await executeCommand('kubectl', [
+						'delete', 'pod', podName, '-n', namespace, '--force', '--grace-period=0'
+					]);
+					if (stderr && !stderr.includes('deleted')) {
+						vscode.window.showErrorMessage(`Failed to kill pod: ${stderr}`);
+						return;
+					}
+					vscode.window.showInformationMessage(`Successfully killed pod "${podName}" in namespace "${namespace}"`);
+				} catch (err: any) {
+					vscode.window.showErrorMessage(`Failed to kill pod: ${err.message}`);
+				}
+				return;
+			}
 			const podInfo = await getPodNameForProviderOrFunction(resource);
 			if (!podInfo) return;
 

@@ -150,7 +150,7 @@
       "view/item/context": [
         {
           "command": "crossplane-explorer.editResource",
-          "when": "view == crossplaneExplorer && viewItem != logs-provider-pod",
+          "when": "view == crossplaneExplorer && (viewItem != crossplane-pod || resourceType == 'logs-crossplane-pod') && viewItem != logs-provider-pod",
           "group": "navigation"
         },
         {
@@ -200,12 +200,12 @@
         },
         {
           "command": "crossplaneExplorer.restartPod",
-          "when": "view == crossplaneExplorer && (viewItem == provider || viewItem == function)",
+          "when": "view == crossplaneExplorer && (viewItem == provider || viewItem == function || viewItem == crossplane-pod)",
           "group": "navigation@100"
         },
         {
           "command": "crossplaneExplorer.killPod",
-          "when": "view == crossplaneExplorer && (viewItem == provider || viewItem == function)",
+          "when": "view == crossplaneExplorer && (viewItem == provider || viewItem == function || viewItem == crossplane-pod)",
           "group": "navigation@101"
         },
         {

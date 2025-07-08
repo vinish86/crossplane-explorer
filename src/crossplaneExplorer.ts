@@ -530,6 +530,37 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
             });
         }
         
+        // --- CROSSPLANE PODS UNDER XPExplorer ---
+        if (element && element.label === 'crossplane' && !element.resourceType) {
+            // Show all pods with label 'app.kubernetes.io/instance=crossplane'
+            try {
+                const { stdout } = await executeCommand('kubectl', [
+                    'get', 'pods', '--all-namespaces',
+                    '-l', 'app.kubernetes.io/instance=crossplane',
+                    '-o', 'json'
+                ]);
+                const result = JSON.parse(stdout);
+                if (!result.items || result.items.length === 0) return [];
+                return result.items.map((item: any) => {
+                    const name = item.metadata.name;
+                    const namespace = item.metadata.namespace;
+                    const node = new CrossplaneResource(name, vscode.TreeItemCollapsibleState.None, 'crossplane-pod', name, namespace);
+                    node.iconPath = new vscode.ThemeIcon('package'); // Use cube icon for pods
+                    node.contextValue = 'crossplane-pod';
+                    node.tooltip = `${name} (${namespace})`;
+                    node.command = {
+                        command: 'crossplane-explorer.showPodDetails',
+                        title: 'Show Pod Details',
+                        arguments: [node]
+                    };
+                    return node;
+                });
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Error fetching crossplane pods: ${err.message}`);
+                return [];
+            }
+        }
+        
         try {
             const resourceType = element.label;
             let args = ['get', resourceType, '-o', 'json'];
@@ -623,7 +654,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
     }
 
     private getRootItems(): CrossplaneResource[] {
-        const itemLabels = ['environmentconfigs', 'compositions', 'configurations', 'deploymentruntimeconfigs', 'xrds', 'providers', 'functions', 'providerconfigs', 'logs', 'deployment-flow'];
+        const itemLabels = ['environmentconfigs', 'compositions', 'configurations', 'deploymentruntimeconfigs', 'xrds', 'providers', 'functions', 'providerconfigs', 'crossplane', 'logs', 'deployment-flow'];
         return itemLabels.map(label => new CrossplaneResource(label, vscode.TreeItemCollapsibleState.Collapsed));
     }
 }
@@ -638,6 +669,9 @@ export class CrossplaneResource extends vscode.TreeItem {
     ) {
         super(label, collapsibleState);
 
+        // Declare iconBase once for all cases that need it
+        const iconBase = require('path').join(__dirname, '..', 'resources');
+
         if (this.resourceName) {
             // It's a leaf node (an actual resource)
             this.iconPath = new vscode.ThemeIcon('archive');
@@ -645,7 +679,6 @@ export class CrossplaneResource extends vscode.TreeItem {
             // It's a category node or the root
             switch (this.label) {
                 case 'XPExplorer':
-                    const iconBase = require('path').join(__dirname, '..', 'resources');
                     this.iconPath = {
                         light: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-light.svg')),
                         dark: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-dark.svg'))
@@ -692,13 +725,10 @@ export class CrossplaneResource extends vscode.TreeItem {
                     }
                     break;
                 case 'crossplane':
-                    if (this.resourceType && this.resourceType.startsWith('logs-')) {
-                        const iconBase = require('path').join(__dirname, '..', 'resources');
-                        this.iconPath = {
-                            light: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-light.svg')),
-                            dark: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-dark.svg'))
-                        };
-                    }
+                    this.iconPath = {
+                        light: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-light.svg')),
+                        dark: vscode.Uri.file(require('path').join(iconBase, 'ice-cream-stick-dark.svg'))
+                    };
                     break;
                 case 'providerconfigs':
                     this.iconPath = new vscode.ThemeIcon('unfold');
