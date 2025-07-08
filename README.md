@@ -12,6 +12,7 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 - **One-Click Refresh**: Instantly refresh the resource list with the refresh button.
 - **kapply & kdelete Status Bar Buttons**: Instantly apply or delete the currently open YAML file using the status bar buttons at the bottom right of VS Code. The **kapply** button (cloud upload icon) runs `kubectl apply -f <current YAML file>`, and the **kdelete** button (trash icon) runs `kubectl delete -f <current YAML file>`. Both actions show a notification with the result.
 - **Beautiful Icons**: Each resource type has a clear, modern icon for easy navigation.
+- **Crossplane Pods Management**: The **crossplane** category under XPExplorer lists all Crossplane pods in your cluster. You can right-click any Crossplane pod and select **Restart Pod** or **Kill Pod** to manage the pod lifecycle, just like for provider and function pods. These actions are also available for provider and function pods.
 - **CBT/Trace on XR**: Right-click any XR (composite resource) under deployment-flow and select **CBT** to run `crossplane beta trace` and view XR status in a tabular format in the Output panel.
 - **Field Watch (Real-Time Diff)**: Right-click any XR or MR under deployment-flow and select **Start Field Watch** to see real-time, field-level diffs for resource changes. You can also select **Stop Field Watch** to stop watching that resource. Both options are always available in the context menu, and you can run multiple Field Watches concurrently. The extension will handle duplicate start/stop requests gracefully. Powered by the Kubernetes JS client, this feature shows a clean, YAML-like diff output for every change, with no off-by-one or noisy metadata. Only meaningful changes are shown, making it easy to track resource evolution live.
 - **Pause/Resume XR and MR**: Right-click any XR or MR and select **Pause Resource** to add the annotation `crossplane.io/paused=true`, pausing reconciliation for that resource. Select **Resume Resource** to set the annotation to `crossplane.io/paused=false`, resuming reconciliation. The extension checks for permissions and verifies that the annotation was applied. If you do not have permission or the annotation was not applied, you will see a clear error or warning message. This feature is idempotent and always sets the annotation to the desired value.
@@ -92,10 +93,10 @@ You can now enable or disable Debug Mode for both **Provider** and **Function** 
 
 ## Restarting or Killing Provider/Function Pods
 
-You can now restart or force-kill the pod for any Provider or Function directly from the context menu:
+You can now restart or force-kill the pod for any **Provider**, **Function**, or **Crossplane** directly from the context menu:
 
-- **Restart Pod**: Right-click a provider or function and select **Restart Pod**. This will delete the pod, causing Kubernetes to recreate it. Useful for troubleshooting or applying config changes.
-- **Kill Pod**: Right-click a provider or function and select **Kill Pod**. This will force delete the pod immediately (no graceful shutdown). The pod will be recreated, but any local data will be lost.
+- **Restart Pod**: Right-click a provider, function, or crossplane pod and select **Restart Pod**. This will delete the pod, causing Kubernetes to recreate it. Useful for troubleshooting or applying config changes.
+- **Kill Pod**: Right-click a provider, function, or crossplane pod and select **Kill Pod**. This will force delete the pod immediately (no graceful shutdown). The pod will be recreated, but any local data will be lost.
 
 Both actions will show a confirmation dialog before proceeding:
 
@@ -205,7 +206,7 @@ This workflow ensures you have full control over when metrics are collected, avo
 
 ## Release Notes
 
-### 0.0.51
+### 0.0.53
 - Initial release: resource browsing, YAML editing, status display, and more.
 
 ---
