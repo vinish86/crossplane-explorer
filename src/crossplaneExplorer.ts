@@ -439,7 +439,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     // Set resourceType to the full resource type for correct kubectl get
                     const node = new CrossplaneResource(label, vscode.TreeItemCollapsibleState.None, element.resourceName, name);
                     node.contextValue = 'providerconfig';
-                    node.iconPath = new vscode.ThemeIcon('cloud');
+                    node.iconPath = new vscode.ThemeIcon('unfold');
                     node.command = {
                         command: 'crossplane-explorer.viewResource',
                         title: 'View Resource YAML',
