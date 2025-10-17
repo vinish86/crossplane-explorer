@@ -1945,18 +1945,47 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // Keep track of open Helm release detail tabs to prevent duplicates
-const openHelmReleaseTabs = new Map<string, vscode.TextEditor>();
+const openHelmReleaseTabs = new Map<string, { editor: vscode.TextEditor, revision: string }>();
+
+// Function to clear cached tab for a specific release (used after rollback/upgrade)
+function clearHelmReleaseTab(releaseName: string, namespace: string) {
+	const releaseKey = `${releaseName}-${namespace}`;
+	openHelmReleaseTabs.delete(releaseKey);
+	console.log(`Cleared cached tab for release: ${releaseKey}`);
+}
 
 async function showEnhancedHelmReleaseDetails(release: any, helmTreeProvider: HelmTreeProvider) {
 	try {
 		// Create unique key for this release
 		const releaseKey = `${release.name}-${release.namespace}`;
 		
-		// Check if tab is already open and switch to it
+		// Check if tab is already open
 		if (openHelmReleaseTabs.has(releaseKey)) {
-			const existingEditor = openHelmReleaseTabs.get(releaseKey);
-			if (existingEditor && !existingEditor.document.isClosed) {
-				await vscode.window.showTextDocument(existingEditor.document, {
+			const cached = openHelmReleaseTabs.get(releaseKey)!;
+			
+			// Check if revision has changed (e.g., after rollback/upgrade)
+			if (cached.revision !== release.revision) {
+				console.log(`Revision changed for ${releaseKey}: ${cached.revision} -> ${release.revision}. Refreshing content...`);
+				
+				// Close the old tab first to avoid save prompts
+				if (cached.editor && !cached.editor.document.isClosed) {
+					const oldDocument = cached.editor.document;
+					// Show the document first to ensure we can close it
+					await vscode.window.showTextDocument(oldDocument, {
+						viewColumn: vscode.ViewColumn.One,
+						preview: false,
+						preserveFocus: false
+					});
+					// Close the active editor (the old tab)
+					await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+					console.log(`Closed old tab for ${releaseKey}`);
+				}
+				
+				// Clear the cached tab so we recreate it with new data
+				openHelmReleaseTabs.delete(releaseKey);
+			} else if (cached.editor && !cached.editor.document.isClosed) {
+				// Same revision, just switch to existing tab
+				await vscode.window.showTextDocument(cached.editor.document, {
 					viewColumn: vscode.ViewColumn.One,
 					preview: false
 				});
@@ -2078,8 +2107,11 @@ ${manifest || '# Manifest not available'}
 			preview: false
 		});
 		
-		// Track this tab
-		openHelmReleaseTabs.set(releaseKey, editor);
+		// Track this tab with revision info
+		openHelmReleaseTabs.set(releaseKey, {
+			editor: editor,
+			revision: release.revision
+		});
 		
 		// Listen for document close to clean up
 		const disposable = vscode.workspace.onDidCloseTextDocument((closedDoc) => {
