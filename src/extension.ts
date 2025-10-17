@@ -14,6 +14,7 @@ import { createTwoFilesPatch } from 'diff';
 import { diff as deepDiff, Diff as DeepDiff } from 'deep-diff';
 import fetch from 'node-fetch'; // npm install node-fetch@2
 import { CrossplaneMetricsTreeProvider } from './metricsTreeProvider';
+import { HelmTreeProvider } from './helmTreeProvider';
 
 const resourceToTempFileMap = new Map<string, string>();
 const tempFileToResourceMap = new Map<string, string>();
@@ -46,6 +47,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const crossplaneExplorerProvider = new CrossplaneExplorerProvider();
 	context.subscriptions.push(vscode.window.registerTreeDataProvider('crossplaneExplorer', crossplaneExplorerProvider));
+
+	const helmTreeProvider = new HelmTreeProvider();
+	context.subscriptions.push(vscode.window.registerTreeDataProvider('helmExplorer', helmTreeProvider));
 
 	context.subscriptions.push(vscode.commands.registerCommand('crossplane-explorer.refresh', () => {
 		crossplaneExplorerProvider.refresh();
@@ -1762,6 +1766,110 @@ export function activate(context: vscode.ExtensionContext) {
 				vscode.window.showInformationMessage(message);
 			}
 		});
+	}));
+
+	// Helm Explorer Commands
+	context.subscriptions.push(vscode.commands.registerCommand('helm-explorer.refreshReleases', () => {
+		helmTreeProvider.refreshReleases();
+	}));
+
+
+	context.subscriptions.push(vscode.commands.registerCommand('helm-explorer.viewRelease', async (item: any) => {
+		if (!item || !item.release) {
+			vscode.window.showErrorMessage('No release selected');
+			return;
+		}
+		const release = item.release;
+		
+		// Create a new document with release details
+		const doc = await vscode.workspace.openTextDocument({
+			content: `# Helm Release: ${release.name}\n\n` +
+				`**Namespace:** ${release.namespace}\n` +
+				`**Status:** ${release.status}\n` +
+				`**Revision:** ${release.revision}\n` +
+				`**Chart:** ${release.chart}\n` +
+				`**App Version:** ${release.appVersion}\n` +
+				`**Updated:** ${release.updated}\n\n` +
+				`## Release History\n` +
+				`\`\`\`json\n${JSON.stringify(await helmTreeProvider.getReleaseHistory(release), null, 2)}\n\`\`\`\n\n` +
+				`## Release Manifest\n\`\`\`yaml\n${await helmTreeProvider.getReleaseManifest(release)}\n\`\`\`\n\n` +
+				`## Release Values\n\`\`\`yaml\n${await helmTreeProvider.getReleaseValues(release)}\n\`\`\``,
+			language: 'markdown'
+		});
+		await vscode.window.showTextDocument(doc);
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('helm-explorer.uninstallRelease', async (item: any) => {
+		console.log('=== HELM UNINSTALL COMMAND STARTED ===');
+		console.log('helm-explorer.uninstallRelease called with item:', item);
+		
+		if (!item || !item.release) {
+			console.log('ERROR: No release selected');
+			vscode.window.showErrorMessage('No release selected');
+			return;
+		}
+		
+		const release = item.release;
+		console.log('Release to uninstall:', release);
+		console.log('About to show confirmation dialog...');
+		
+		try {
+			// Use showInformationMessage with modal - let VS Code provide the default Cancel
+			console.log('Displaying confirmation dialog...');
+			const confirm = await vscode.window.showInformationMessage(
+				`Are you sure you want to uninstall Helm release "${release.name}" in namespace "${release.namespace}"?`,
+				{ modal: true },
+				'Yes, Uninstall'
+			);
+			console.log('User confirmation result:', confirm);
+			
+			if (confirm === 'Yes, Uninstall') {
+				console.log('User confirmed uninstall - calling helmTreeProvider.uninstallRelease...');
+				await helmTreeProvider.uninstallRelease(release);
+				console.log('helmTreeProvider.uninstallRelease completed');
+			} else {
+				// undefined (dismissed) should be treated as cancellation
+				console.log('User cancelled or dismissed uninstall dialog');
+			}
+		} catch (error) {
+			console.log('ERROR in uninstall command:', error);
+			vscode.window.showErrorMessage(`Error in uninstall command: ${error}`);
+		}
+		
+		console.log('=== HELM UNINSTALL COMMAND ENDED ===');
+	}));
+
+
+	context.subscriptions.push(vscode.commands.registerCommand('helm-explorer.rollbackRelease', async (item: any) => {
+		if (!item || !item.release) {
+			vscode.window.showErrorMessage('No release selected');
+			return;
+		}
+		const release = item.release;
+		
+		// Get release history to show available revisions
+		const history = await helmTreeProvider.getReleaseHistory(release);
+		const revisions = history.map((h: any) => ({
+			label: `Revision ${h.revision}`,
+			description: `${h.status} - ${h.updated}`,
+			detail: h.description || 'No description',
+			revision: h.revision.toString()
+		}));
+		
+		const selectedRevision = await vscode.window.showQuickPick(revisions, {
+			placeHolder: 'Select revision to rollback to'
+		});
+		
+		if (selectedRevision) {
+			const confirm = await vscode.window.showWarningMessage(
+				`Rollback "${release.name}" to revision ${selectedRevision.revision}?`,
+				'Yes', 'No'
+			);
+			
+			if (confirm === 'Yes') {
+				await helmTreeProvider.rollbackRelease(release, selectedRevision.revision);
+			}
+		}
 	}));
 }
 

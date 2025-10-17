@@ -5,6 +5,7 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 ## Features
 
 - **Tree View of Crossplane Resources**: Browse managed resources, composites, claims, compositions, XRDs (CompositeResourceDefinitions), providers, and functions in a dedicated sidebar.
+- **Helm Releases Management**: The **Helm** section provides a comprehensive view of all Helm releases in your cluster, organized by namespace. View release details, history, manifests, and values. Uninstall releases or rollback to previous revisions with confirmation prompts for safety.
 - **Performance Panel (Live Metrics)**: The **Performance** panel provides live usage metrics for Crossplane pods (CPU, memory, and more) and lets you compare them with cluster node CPU usage. This gives you a fair idea of how much resource Crossplane is utilizing relative to your cluster, helping with troubleshooting and capacity planning.
 - **Delete with Confirmation**: Right-click any supported resource (including XRDs, compositions, providers, etc.) and select **Delete Resource**. You will always be prompted for confirmation before deletion, ensuring safety against accidental removal.
 - **YAML Editing**: Click any resource to open its YAML in a real file. Edit and save to apply changes directly to your cluster (like `kubectl edit`).
@@ -22,6 +23,37 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
   - **Kill Pod**: Force deletes the pod immediately (with no graceful shutdown); the pod will be recreated, but any local data will be lost. Use with caution.
   - Both actions prompt for confirmation before proceeding, to prevent accidental disruption.
 - View and manage Crossplane resources (Claims, XRs, MRs, Providers, Functions, XRDs, Compositions, Configurations, DeploymentRuntimeConfigs) in a tree view
+
+## Helm Releases Management
+
+The **Helm** section provides comprehensive management of Helm releases in your Kubernetes cluster, similar to [OpenLens](https://github.com/MuhammedKalkan/OpenLens/):
+
+### Features
+- **Namespace Organization**: Releases are grouped by namespace for easy navigation
+- **Status Indicators**: Visual status indicators show the health of each release:
+  - 🟢 **Deployed**: Release is successfully deployed and running
+  - 🟡 **Pending**: Release is in pending state (install/upgrade/rollback)
+  - 🔴 **Failed**: Release deployment has failed
+  - 🟠 **Uninstalling**: Release is being uninstalled
+  - 🔵 **Superseded**: Release has been superseded by a newer version
+- **Release Details**: Click any release to view comprehensive details including:
+  - Release metadata (name, namespace, status, revision, chart, app version)
+  - Release history with all revisions
+  - Full manifest (deployed resources)
+  - Release values (configuration)
+- **Release Management**: Right-click any release for management options:
+  - **View Release Details**: Opens a markdown document with all release information
+  - **Uninstall Release**: Safely uninstall the release with confirmation prompt
+  - **Rollback Release**: Rollback to a previous revision with revision selection
+
+### Usage
+1. Navigate to the **Helm** section in the left sidebar
+2. Expand namespaces to see releases
+3. Click any release to view its details
+4. Right-click for management options (uninstall, rollback)
+5. Use the refresh button to update the release list
+
+> **Note**: The Helm section requires the `helm` CLI to be installed and configured with access to your cluster.
 
 ## Deployment Tree Structure: claim > XR > MR
 
