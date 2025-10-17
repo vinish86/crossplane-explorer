@@ -4,7 +4,7 @@
   "displayName": "Crossplane Explorer",
   "icon": "resources/icon/icon.png",
   "description": "A Visual Studio Code extension for browsing, editing, and managing Crossplane resources in your Kubernetes cluster. Features a modern tree view, direct YAML editing, and seamless integration with kubectl.",
-  "version": "0.0.54",
+  "version": "0.0.55",
   "author": "Vinish Soman",
   "engines": {
     "vscode": "^1.101.0"
@@ -13,21 +13,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onView:crossplaneExplorer",
-    "onView:helmExplorer",
-    "onCommand:crossplaneExplorer.compositionInit",
-    "onCommand:crossplaneExplorer.renderTest",
-    "onCommand:crossplaneExplorer.yamllint",
-    "onCommand:crossplaneExplorer.schemaValidation",
-    "onCommand:crossplaneExplorer.deployComposition",
-    "onCommand:crossplaneExplorer.undeployComposition",
-    "onCommand:crossplaneExplorer.applyCurrentYaml",
-    "onCommand:helm-explorer.viewRelease",
-    "onCommand:helm-explorer.uninstallRelease",
-    "onCommand:helm-explorer.rollbackRelease",
-    "onCommand:helm-explorer.upgradeRelease",
-    "onCommand:helm-explorer.refreshReleases"
+    "*"
   ],
   "main": "./out/extension.js",
   "contributes": {

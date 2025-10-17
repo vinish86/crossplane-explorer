@@ -267,6 +267,11 @@ This workflow ensures you have full control over when metrics are collected, avo
 
 ## Release Notes
 
+### 0.0.55
+- **Fixed Helm View Registration**: Resolved "No view is registered with id: helmExplorer" error by updating activation events
+- **Universal Activation**: Changed to universal activation for reliable extension loading across different environments
+- **Improved Reliability**: Ensures all views and commands are properly registered on installation
+
 ### 0.0.54
 - Added comprehensive Helm releases management with lightweight, full-featured support
 - Enhanced rollback and upgrade operations with detailed notifications
