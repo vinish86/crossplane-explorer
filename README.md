@@ -5,7 +5,7 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 ## Features
 
 - **Tree View of Crossplane Resources**: Browse managed resources, composites, claims, compositions, XRDs (CompositeResourceDefinitions), providers, and functions in a dedicated sidebar.
-- **Helm Releases Management**: The **Helm** section provides a comprehensive view of all Helm releases in your cluster, organized by namespace. View release details, history, manifests, and values. Uninstall releases or rollback to previous revisions with confirmation prompts for safety.
+- **Helm Releases Management**: The **Helm** section provides comprehensive management of Helm releases in your cluster, organized by namespace. View detailed release information in formatted markdown documents, upgrade to different chart versions, rollback to previous revisions with interactive selection, and safely uninstall releases. Features smart tab management, enhanced notifications, and OpenLens-style functionality.
 - **Performance Panel (Live Metrics)**: The **Performance** panel provides live usage metrics for Crossplane pods (CPU, memory, and more) and lets you compare them with cluster node CPU usage. This gives you a fair idea of how much resource Crossplane is utilizing relative to your cluster, helping with troubleshooting and capacity planning.
 - **Delete with Confirmation**: Right-click any supported resource (including XRDs, compositions, providers, etc.) and select **Delete Resource**. You will always be prompted for confirmation before deletion, ensuring safety against accidental removal.
 - **YAML Editing**: Click any resource to open its YAML in a real file. Edit and save to apply changes directly to your cluster (like `kubectl edit`).
@@ -26,7 +26,7 @@ A Visual Studio Code extension to view, edit, and manage Crossplane resources in
 
 ## Helm Releases Management
 
-The **Helm** section provides comprehensive management of Helm releases in your Kubernetes cluster, similar to [OpenLens](https://github.com/MuhammedKalkan/OpenLens/):
+The **Helm** section provides lightweight, comprehensive management of Helm releases in your Kubernetes cluster:
 
 ### Features
 - **Namespace Organization**: Releases are grouped by namespace for easy navigation
@@ -36,22 +36,51 @@ The **Helm** section provides comprehensive management of Helm releases in your 
   - 🔴 **Failed**: Release deployment has failed
   - 🟠 **Uninstalling**: Release is being uninstalled
   - 🔵 **Superseded**: Release has been superseded by a newer version
-- **Release Details**: Click any release to view comprehensive details including:
-  - Release metadata (name, namespace, status, revision, chart, app version)
+- **Smart Release Details**: Click any release to view comprehensive details in a formatted markdown document:
+  - Release metadata (name, namespace, status, revision, chart, app version, updated time)
   - Release history with all revisions
   - Full manifest (deployed resources)
   - Release values (configuration)
-- **Release Management**: Right-click any release for management options:
-  - **View Release Details**: Opens a markdown document with all release information
-  - **Uninstall Release**: Safely uninstall the release with confirmation prompt
-  - **Rollback Release**: Rollback to a previous revision with revision selection
+  - Release notes
+  - Quick action tips for management operations
+- **Advanced Release Management**: Right-click any release for management options:
+  - **View Release Details**: Opens a formatted markdown document with all release information
+  - **Uninstall Release**: Safely uninstall the release with modal confirmation prompt
+  - **Rollback Release**: Rollback to a previous revision with interactive revision selection
+  - **Upgrade Release**: Upgrade to different chart versions with version picker
+- **Enhanced Notifications**: Rich notifications for all operations:
+  - **Rollback Success**: Shows FROM/TO revisions + NEW revision after rollback
+  - **Upgrade Success**: Shows chart version and deployment status
+  - **Interactive "View Details"**: Compact summaries with Close button
+  - **Proper timing**: Notifications appear reliably after operations complete
 
 ### Usage
 1. Navigate to the **Helm** section in the left sidebar
 2. Expand namespaces to see releases
-3. Click any release to view its details
-4. Right-click for management options (uninstall, rollback)
+3. Click any release to view its details in a formatted markdown document
+4. Right-click for management options:
+   - **Uninstall**: Confirm in modal dialog to safely remove release
+   - **Rollback**: Select target revision from list, confirm to rollback
+   - **Upgrade**: Choose chart version from available versions, confirm to upgrade
 5. Use the refresh button to update the release list
+6. Notifications will show operation results with detailed summaries
+
+### Rollback Workflow
+1. Right-click a release and select **Rollback Release**
+2. Choose target revision from the list (sorted by newest first)
+3. Confirm the rollback in the modal dialog
+4. Receive notification showing:
+   - FROM revision (what you were on)
+   - TO revision (what you rolled back to)
+   - NEW revision (the actual current revision after rollback)
+5. Release details tab automatically updates with new information
+
+### Upgrade Workflow
+1. Right-click a release and select **Upgrade Release**
+2. Choose target chart version from the available versions list
+3. Confirm the upgrade in the modal dialog
+4. Receive notification showing chart version and deployment status
+5. Release details tab automatically updates with new information
 
 > **Note**: The Helm section requires the `helm` CLI to be installed and configured with access to your cluster.
 
