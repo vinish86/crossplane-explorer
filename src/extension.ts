@@ -1905,42 +1905,70 @@ export function activate(context: vscode.ExtensionContext) {
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('helm-explorer.upgradeRelease', async (item: any) => {
+		console.log('=== HELM UPGRADE COMMAND STARTED ===');
+		console.log('helm-explorer.upgradeRelease called with item:', item);
+		
 		if (!item || !item.release) {
+			console.log('ERROR: No release selected');
 			vscode.window.showErrorMessage('No release selected');
 			return;
 		}
 		const release = item.release;
+		console.log('Release to upgrade:', release);
 		
-		// Get available chart versions
-		const versions = await helmTreeProvider.getAvailableChartVersions(release);
-		if (versions.length === 0) {
-			vscode.window.showErrorMessage('No chart versions available');
-			return;
-		}
-		
-		// Create version selection items
-		const versionItems = versions.map(version => ({
-			label: version,
-			description: version === release.chart.split('-')[1] ? 'Current version' : '',
-			version: version
-		}));
-		
-		const selectedVersion = await vscode.window.showQuickPick(versionItems, {
-			placeHolder: `Select chart version for ${release.name} (current: ${release.chart})`,
-			title: 'Upgrade Helm Release'
-		});
-		
-		if (selectedVersion) {
-			const confirm = await vscode.window.showWarningMessage(
-				`Upgrade "${release.name}" to chart version ${selectedVersion.version}?`,
-				{ modal: true },
-				'Yes, Upgrade'
-			);
+		try {
+			console.log('Getting available chart versions...');
+			// Get available chart versions
+			const versions = await helmTreeProvider.getAvailableChartVersions(release);
+			console.log('Available versions:', versions);
 			
-			if (confirm === 'Yes, Upgrade') {
-				await helmTreeProvider.upgradeRelease(release, selectedVersion.version);
+			if (versions.length === 0) {
+				console.log('ERROR: No chart versions available');
+				vscode.window.showErrorMessage('No chart versions available');
+				return;
 			}
+			
+			// Create version selection items
+			const versionItems = versions.map(version => ({
+				label: version,
+				description: version === release.chart.split('-')[1] ? 'Current version' : '',
+				version: version
+			}));
+			
+			console.log('Showing version picker...');
+			const selectedVersion = await vscode.window.showQuickPick(versionItems, {
+				placeHolder: `Select chart version for ${release.name} (current: ${release.chart})`,
+				title: 'Upgrade Helm Release'
+			});
+			
+			console.log('Selected version:', selectedVersion);
+			
+			if (selectedVersion) {
+				console.log('Showing confirmation dialog...');
+				const confirm = await vscode.window.showWarningMessage(
+					`Upgrade "${release.name}" to chart version ${selectedVersion.version}?`,
+					{ modal: true },
+					'Yes, Upgrade'
+				);
+				
+				console.log('User confirmation:', confirm);
+				
+				if (confirm === 'Yes, Upgrade') {
+					console.log('Calling helmTreeProvider.upgradeRelease...');
+					await helmTreeProvider.upgradeRelease(release, selectedVersion.version);
+					console.log('Upgrade completed');
+				} else {
+					console.log('User cancelled upgrade');
+				}
+			} else {
+				console.log('No version selected - user dismissed dialog');
+			}
+		} catch (error: any) {
+			console.log('ERROR in upgrade command:', error);
+			vscode.window.showErrorMessage(`Upgrade failed: ${error.message}`);
 		}
+		
+		console.log('=== HELM UPGRADE COMMAND ENDED ===');
 	}));
 }
 
@@ -1970,13 +1998,20 @@ async function showEnhancedHelmReleaseDetails(release: any, helmTreeProvider: He
 				// Close the old tab first to avoid save prompts
 				if (cached.editor && !cached.editor.document.isClosed) {
 					const oldDocument = cached.editor.document;
+					
+					// Revert changes to mark document as not dirty (prevents save prompt)
+					if (oldDocument.isDirty) {
+						await vscode.commands.executeCommand('workbench.action.files.revert');
+					}
+					
 					// Show the document first to ensure we can close it
 					await vscode.window.showTextDocument(oldDocument, {
 						viewColumn: vscode.ViewColumn.One,
 						preview: false,
 						preserveFocus: false
 					});
-					// Close the active editor (the old tab)
+					
+					// Close the active editor without save prompt
 					await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
 					console.log(`Closed old tab for ${releaseKey}`);
 				}

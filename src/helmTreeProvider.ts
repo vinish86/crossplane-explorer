@@ -224,13 +224,74 @@ export class HelmTreeProvider implements vscode.TreeDataProvider<HelmItem> {
             console.log(`Executing: helm ${args.join(' ')}`);
             const result = await executeCommand('helm', args);
             console.log(`Rollback result:`, result);
+            console.log(`About to show success notification...`);
             
-            vscode.window.showInformationMessage(
-                `✅ Successfully rolled back "${release.name}" to revision ${revision}`
-            );
-            
-            // Refresh the Helm tree to show updated revision
+            // Refresh the Helm tree first
             this.refreshReleases();
+            
+            // Use setTimeout to ensure notification shows after all operations complete
+            setTimeout(async () => {
+                console.log(`Showing notification now...`);
+                
+                // Get the current release info after rollback to show the NEW revision
+                try {
+                    const currentRelease = await this.getCurrentReleaseInfo(release.name, release.namespace);
+                    const newRevision = currentRelease?.revision || 'unknown';
+                    
+                    vscode.window.showInformationMessage(
+                        `✅ Rollback Success: "${release.name}" rolled back to revision ${revision}`,
+                        'View Details',
+                        'OK'
+                    ).then(selection => {
+                        console.log(`Notification button clicked: ${selection}`);
+                        if (selection === 'View Details') {
+                            // Show Helm's output with rollback details
+                            const output = result.stdout.trim() || 'Rollback completed successfully';
+                            
+                            // Create a more informative summary for rollback
+                            const summary = `✅ Rollback completed successfully!\n\n` +
+                                `📦 Release: ${release.name}\n` +
+                                `📋 Rolled back FROM revision ${release.revision} TO revision ${revision}\n` +
+                                `🆕 NEW revision after rollback: ${newRevision}\n` +
+                                `🏷️ Namespace: ${release.namespace}\n` +
+                                `📅 Status: Deployed\n\n` +
+                                `Helm Output: ${output}`;
+                            
+                            vscode.window.showInformationMessage(
+                                `Helm Rollback Summary:\n${summary}`,
+                                { modal: true },
+                                'Close'
+                            );
+                        }
+                    });
+                } catch (error) {
+                    console.log(`Error getting current release info:`, error);
+                    // Fallback to original notification if we can't get current info
+                    vscode.window.showInformationMessage(
+                        `✅ Rollback Success: "${release.name}" rolled back to revision ${revision}`,
+                        'View Details',
+                        'OK'
+                    ).then(selection => {
+                        if (selection === 'View Details') {
+                            const output = result.stdout.trim() || 'Rollback completed successfully';
+                            const summary = `✅ Rollback completed successfully!\n\n` +
+                                `📦 Release: ${release.name}\n` +
+                                `📋 Rolled back FROM revision ${release.revision} TO revision ${revision}\n` +
+                                `🏷️ Namespace: ${release.namespace}\n` +
+                                `📅 Status: Deployed\n\n` +
+                                `Helm Output: ${output}`;
+                            
+                            vscode.window.showInformationMessage(
+                                `Helm Rollback Summary:\n${summary}`,
+                                { modal: true },
+                                'Close'
+                            );
+                        }
+                    });
+                }
+                
+                console.log(`Notification call completed`);
+            }, 100);
             
             console.log(`=== HELM ROLLBACK COMPLETED ===`);
         } catch (error: any) {
@@ -239,9 +300,65 @@ export class HelmTreeProvider implements vscode.TreeDataProvider<HelmItem> {
             vscode.window.showErrorMessage(`Helm rollback failed: ${error.message}`);
         }
     }
+    
+    private async getCurrentReleaseInfo(releaseName: string, namespace: string): Promise<HelmRelease | null> {
+        try {
+            console.log(`Getting current release info for ${releaseName} in namespace ${namespace}`);
+            // Use helm list with filter to find the specific release
+            const { stdout } = await executeCommand('helm', ['list', '--filter', releaseName, '--namespace', namespace, '--output', 'json']);
+            console.log(`Helm list output:`, stdout);
+            
+            const releases = JSON.parse(stdout);
+            console.log(`Parsed releases:`, releases);
+            
+            if (releases.length > 0) {
+                const release = releases[0];
+                console.log(`Found release:`, release);
+                return {
+                    name: release.name,
+                    namespace: release.namespace,
+                    revision: release.revision.toString(),
+                    updated: release.updated,
+                    status: release.status,
+                    chart: release.chart,
+                    appVersion: release.app_version || 'N/A'
+                };
+            }
+            console.log(`No releases found`);
+            return null;
+        } catch (error) {
+            console.log(`Error getting current release info:`, error);
+            // Try alternative approach - get all releases and filter
+            try {
+                console.log(`Trying alternative approach...`);
+                const { stdout } = await executeCommand('helm', ['list', '--all-namespaces', '--output', 'json']);
+                const allReleases = JSON.parse(stdout);
+                const matchingRelease = allReleases.find((r: any) => r.name === releaseName && r.namespace === namespace);
+                
+                if (matchingRelease) {
+                    console.log(`Found release via alternative approach:`, matchingRelease);
+                    return {
+                        name: matchingRelease.name,
+                        namespace: matchingRelease.namespace,
+                        revision: matchingRelease.revision.toString(),
+                        updated: matchingRelease.updated,
+                        status: matchingRelease.status,
+                        chart: matchingRelease.chart,
+                        appVersion: matchingRelease.app_version || 'N/A'
+                    };
+                }
+            } catch (altError) {
+                console.log(`Alternative approach also failed:`, altError);
+            }
+            return null;
+        }
+    }
 
     async upgradeRelease(release: HelmRelease, chartVersion?: string): Promise<void> {
         try {
+            console.log(`=== HELM UPGRADE EXECUTION ===`);
+            console.log(`Release: ${release.name}, Namespace: ${release.namespace}, Chart Version: ${chartVersion}`);
+            
             // Extract chart name from the release chart (e.g., "redis-23.1.3" -> "redis")
             const chartName = release.chart.split('-')[0];
             const chartRepo = chartName === 'redis' ? 'bitnami' : 'stable'; // Default to bitnami for common charts
@@ -251,10 +368,49 @@ export class HelmTreeProvider implements vscode.TreeDataProvider<HelmItem> {
                 args.push('--version', chartVersion);
             }
             
-            await executeCommand('helm', args);
-            vscode.window.showInformationMessage(`Successfully upgraded Helm release: ${release.name}`);
+            console.log(`Executing: helm ${args.join(' ')}`);
+            const result = await executeCommand('helm', args);
+            console.log(`Upgrade result:`, result);
+            console.log(`About to show success notification...`);
+            
+            // Refresh the Helm tree first
             this.refreshReleases();
+            
+            // Use setTimeout to ensure notification shows after all operations complete
+            setTimeout(() => {
+                console.log(`Showing notification now...`);
+                vscode.window.showInformationMessage(
+                    `✅ Upgrade Success: "${release.name}" upgraded to chart version ${chartVersion || 'latest'}`,
+                    'View Details',
+                    'OK'
+                ).then(selection => {
+                    console.log(`Notification button clicked: ${selection}`);
+                    if (selection === 'View Details') {
+                        // Show Helm's output with upgrade details
+                        const output = result.stdout.trim() || 'Upgrade completed successfully';
+                        
+                        // Create a more informative summary for upgrade
+                        const summary = `✅ Upgrade completed successfully!\n\n` +
+                            `📦 Release: ${release.name}\n` +
+                            `📋 Chart Version: ${chartVersion || 'latest'}\n` +
+                            `🏷️ Namespace: ${release.namespace}\n` +
+                            `📅 Status: Deployed\n\n` +
+                            `Helm Output: ${output}`;
+                        
+                        vscode.window.showInformationMessage(
+                            `Helm Upgrade Summary:\n${summary}`,
+                            { modal: true },
+                            'Close'
+                        );
+                    }
+                });
+                console.log(`Notification call completed`);
+            }, 100);
+            
+            console.log(`=== HELM UPGRADE COMPLETED ===`);
         } catch (error: any) {
+            console.log(`=== HELM UPGRADE FAILED ===`);
+            console.log(`Error:`, error);
             vscode.window.showErrorMessage(`Helm upgrade failed: ${error.message}`);
         }
     }
