@@ -1871,6 +1871,45 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		}
 	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('helm-explorer.upgradeRelease', async (item: any) => {
+		if (!item || !item.release) {
+			vscode.window.showErrorMessage('No release selected');
+			return;
+		}
+		const release = item.release;
+		
+		// Get available chart versions
+		const versions = await helmTreeProvider.getAvailableChartVersions(release);
+		if (versions.length === 0) {
+			vscode.window.showErrorMessage('No chart versions available');
+			return;
+		}
+		
+		// Create version selection items
+		const versionItems = versions.map(version => ({
+			label: version,
+			description: version === release.chart.split('-')[1] ? 'Current version' : '',
+			version: version
+		}));
+		
+		const selectedVersion = await vscode.window.showQuickPick(versionItems, {
+			placeHolder: `Select chart version for ${release.name} (current: ${release.chart})`,
+			title: 'Upgrade Helm Release'
+		});
+		
+		if (selectedVersion) {
+			const confirm = await vscode.window.showWarningMessage(
+				`Upgrade "${release.name}" to chart version ${selectedVersion.version}?`,
+				{ modal: true },
+				'Yes, Upgrade'
+			);
+			
+			if (confirm === 'Yes, Upgrade') {
+				await helmTreeProvider.upgradeRelease(release, selectedVersion.version);
+			}
+		}
+	}));
 }
 
 // This method is called when your extension is deactivated

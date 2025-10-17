@@ -225,6 +225,48 @@ export class HelmTreeProvider implements vscode.TreeDataProvider<HelmItem> {
         }
     }
 
+    async upgradeRelease(release: HelmRelease, chartVersion?: string): Promise<void> {
+        try {
+            // Extract chart name from the release chart (e.g., "redis-23.1.3" -> "redis")
+            const chartName = release.chart.split('-')[0];
+            const chartRepo = chartName === 'redis' ? 'bitnami' : 'stable'; // Default to bitnami for common charts
+            
+            const args = ['upgrade', release.name, `${chartRepo}/${chartName}`, '--namespace', release.namespace];
+            if (chartVersion) {
+                args.push('--version', chartVersion);
+            }
+            
+            await executeCommand('helm', args);
+            vscode.window.showInformationMessage(`Successfully upgraded Helm release: ${release.name}`);
+            this.refreshReleases();
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Helm upgrade failed: ${error.message}`);
+        }
+    }
+
+    async getAvailableChartVersions(release: HelmRelease): Promise<string[]> {
+        try {
+            // Extract chart name from the release chart (e.g., "redis-23.1.3" -> "redis")
+            const chartName = release.chart.split('-')[0];
+            const chartRepo = chartName === 'redis' ? 'bitnami' : 'stable'; // Default to bitnami for common charts
+            
+            // Search for available versions
+            const { stdout } = await executeCommand('helm', ['search', 'repo', `${chartRepo}/${chartName}`, '--versions', '--output', 'json']);
+            const versions = JSON.parse(stdout);
+            
+            // Extract and sort versions
+            const versionList = versions.map((v: any) => v.version).sort((a: string, b: string) => {
+                // Simple version comparison (you might want to use a proper semver library)
+                return b.localeCompare(a, undefined, { numeric: true });
+            });
+            
+            return versionList;
+        } catch (error: any) {
+            this.outputChannel?.appendLine(`Error getting chart versions: ${error.message}`);
+            return [];
+        }
+    }
+
     dispose(): void {
         this.outputChannel?.dispose();
     }

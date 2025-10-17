@@ -26,6 +26,7 @@
     "onCommand:helm-explorer.viewRelease",
     "onCommand:helm-explorer.uninstallRelease",
     "onCommand:helm-explorer.rollbackRelease",
+    "onCommand:helm-explorer.upgradeRelease",
     "onCommand:helm-explorer.refreshReleases"
   ],
   "main": "./out/extension.js",
@@ -133,6 +134,10 @@
       {
         "command": "helm-explorer.rollbackRelease",
         "title": "Rollback Release"
+      },
+      {
+        "command": "helm-explorer.upgradeRelease",
+        "title": "Upgrade Release"
       },
       {
         "command": "helm-explorer.refreshReleases",
@@ -268,6 +273,16 @@
           "command": "helm-explorer.rollbackRelease",
           "when": "view == helmExplorer && viewItem == helm-release",
           "group": "navigation@101"
+        },
+        {
+          "command": "helm-explorer.upgradeRelease",
+          "when": "view == helmExplorer && viewItem == helm-release",
+          "group": "navigation@102"
+        },
+        {
+          "command": "helm-explorer.upgradeRelease",
+          "when": "view == helmExplorer && viewItem == helm-release-first",
+          "group": "navigation@102"
         }
       ],
       "explorer/context": [
