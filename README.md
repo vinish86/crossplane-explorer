@@ -267,6 +267,12 @@ This workflow ensures you have full control over when metrics are collected, avo
 
 ## Release Notes
 
+### 0.0.54
+- Added comprehensive Helm releases management with lightweight, full-featured support
+- Enhanced rollback and upgrade operations with detailed notifications
+- Smart tab management for release details with auto-refresh capabilities
+- Interactive revision selection and confirmation dialogs for safe operations
+
 ### 0.0.53
 - Initial release: resource browsing, YAML editing, status display, and more.
 
