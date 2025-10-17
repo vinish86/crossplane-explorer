@@ -238,56 +238,46 @@ export class HelmTreeProvider implements vscode.TreeDataProvider<HelmItem> {
                     const currentRelease = await this.getCurrentReleaseInfo(release.name, release.namespace);
                     const newRevision = currentRelease?.revision || 'unknown';
                     
+                    // Show rollback details directly in the notification area (like upgrade)
+                    const output = result.stdout.trim() || 'Rollback completed successfully';
+                    
+                    // Extract key information for a shorter summary (first 3 lines only)
+                    const lines = output.split('\n');
+                    const shortOutput = lines.slice(0, 3).join('\n');
+                    
+                    // Create a comprehensive summary for rollback
+                    const summary = `✅ Rollback completed successfully!\n\n` +
+                        `📦 Release: ${release.name}\n` +
+                        `📋 Rolled back FROM revision ${release.revision} TO revision ${revision}\n` +
+                        `🆕 NEW revision after rollback: ${newRevision}\n` +
+                        `🏷️ Namespace: ${release.namespace}\n` +
+                        `📅 Status: Deployed\n\n` +
+                        `Helm Output: ${shortOutput}`;
+                    
                     vscode.window.showInformationMessage(
-                        `✅ Rollback Success: "${release.name}" rolled back to revision ${revision}`,
-                        'View Details',
-                        'OK'
-                    ).then(selection => {
-                        console.log(`Notification button clicked: ${selection}`);
-                        if (selection === 'View Details') {
-                            // Show Helm's output with rollback details
-                            const output = result.stdout.trim() || 'Rollback completed successfully';
-                            
-                            // Create a more informative summary for rollback
-                            const summary = `✅ Rollback completed successfully!\n\n` +
-                                `📦 Release: ${release.name}\n` +
-                                `📋 Rolled back FROM revision ${release.revision} TO revision ${revision}\n` +
-                                `🆕 NEW revision after rollback: ${newRevision}\n` +
-                                `🏷️ Namespace: ${release.namespace}\n` +
-                                `📅 Status: Deployed\n\n` +
-                                `Helm Output: ${output}`;
-                            
-                            vscode.window.showInformationMessage(
-                                `Helm Rollback Summary:\n${summary}`,
-                                { modal: true },
-                                'Close'
-                            );
-                        }
-                    });
+                        `Helm Rollback Summary:\n${summary}`,
+                        'Close'
+                    );
                 } catch (error) {
                     console.log(`Error getting current release info:`, error);
-                    // Fallback to original notification if we can't get current info
+                    // Fallback notification with details in notification area
+                    const output = result.stdout.trim() || 'Rollback completed successfully';
+                    
+                    // Extract key information for a shorter summary (first 3 lines only)
+                    const lines = output.split('\n');
+                    const shortOutput = lines.slice(0, 3).join('\n');
+                    
+                    const summary = `✅ Rollback completed successfully!\n\n` +
+                        `📦 Release: ${release.name}\n` +
+                        `📋 Rolled back FROM revision ${release.revision} TO revision ${revision}\n` +
+                        `🏷️ Namespace: ${release.namespace}\n` +
+                        `📅 Status: Deployed\n\n` +
+                        `Helm Output: ${shortOutput}`;
+                    
                     vscode.window.showInformationMessage(
-                        `✅ Rollback Success: "${release.name}" rolled back to revision ${revision}`,
-                        'View Details',
-                        'OK'
-                    ).then(selection => {
-                        if (selection === 'View Details') {
-                            const output = result.stdout.trim() || 'Rollback completed successfully';
-                            const summary = `✅ Rollback completed successfully!\n\n` +
-                                `📦 Release: ${release.name}\n` +
-                                `📋 Rolled back FROM revision ${release.revision} TO revision ${revision}\n` +
-                                `🏷️ Namespace: ${release.namespace}\n` +
-                                `📅 Status: Deployed\n\n` +
-                                `Helm Output: ${output}`;
-                            
-                            vscode.window.showInformationMessage(
-                                `Helm Rollback Summary:\n${summary}`,
-                                { modal: true },
-                                'Close'
-                            );
-                        }
-                    });
+                        `Helm Rollback Summary:\n${summary}`,
+                        'Close'
+                    );
                 }
                 
                 console.log(`Notification call completed`);
@@ -386,8 +376,12 @@ export class HelmTreeProvider implements vscode.TreeDataProvider<HelmItem> {
                 ).then(selection => {
                     console.log(`Notification button clicked: ${selection}`);
                     if (selection === 'View Details') {
-                        // Show Helm's output with upgrade details
+                        // Show Helm's output with upgrade details - limit output to prevent huge popup
                         const output = result.stdout.trim() || 'Upgrade completed successfully';
+                        
+                        // Extract key information for a shorter summary (first 3 lines only)
+                        const lines = output.split('\n');
+                        const shortOutput = lines.slice(0, 3).join('\n');
                         
                         // Create a more informative summary for upgrade
                         const summary = `✅ Upgrade completed successfully!\n\n` +
@@ -395,11 +389,10 @@ export class HelmTreeProvider implements vscode.TreeDataProvider<HelmItem> {
                             `📋 Chart Version: ${chartVersion || 'latest'}\n` +
                             `🏷️ Namespace: ${release.namespace}\n` +
                             `📅 Status: Deployed\n\n` +
-                            `Helm Output: ${output}`;
+                            `Helm Output: ${shortOutput}`;
                         
                         vscode.window.showInformationMessage(
                             `Helm Upgrade Summary:\n${summary}`,
-                            { modal: true },
                             'Close'
                         );
                     }
