@@ -1827,35 +1827,81 @@ export function activate(context: vscode.ExtensionContext) {
 
 
 	context.subscriptions.push(vscode.commands.registerCommand('helm-explorer.rollbackRelease', async (item: any) => {
+		console.log('=== HELM ROLLBACK COMMAND STARTED ===');
+		console.log('helm-explorer.rollbackRelease called with item:', item);
+		
 		if (!item || !item.release) {
+			console.log('ERROR: No release selected');
 			vscode.window.showErrorMessage('No release selected');
 			return;
 		}
 		const release = item.release;
+		console.log('Release to rollback:', release);
 		
-		// Get release history to show available revisions
-		const history = await helmTreeProvider.getReleaseHistory(release);
-		const revisions = history.map((h: any) => ({
-			label: `Revision ${h.revision}`,
-			description: `${h.status} - ${h.updated}`,
-			detail: h.description || 'No description',
-			revision: h.revision.toString()
-		}));
-		
-		const selectedRevision = await vscode.window.showQuickPick(revisions, {
-			placeHolder: 'Select revision to rollback to'
-		});
-		
-		if (selectedRevision) {
-			const confirm = await vscode.window.showWarningMessage(
-				`Rollback "${release.name}" to revision ${selectedRevision.revision}?`,
-				'Yes', 'No'
-			);
+		try {
+			console.log('Getting release history...');
+			// Get release history to show available revisions
+			const history = await helmTreeProvider.getReleaseHistory(release);
+			console.log('Release history:', history);
 			
-			if (confirm === 'Yes') {
-				await helmTreeProvider.rollbackRelease(release, selectedRevision.revision);
+			if (!history || history.length === 0) {
+				vscode.window.showErrorMessage('No revision history found for this release');
+				return;
 			}
+			
+			// Filter out the current revision and sort by revision number (newest first)
+			const currentRevision = parseInt(release.revision);
+			const availableRevisions = history
+				.filter((h: any) => parseInt(h.revision) < currentRevision)
+				.sort((a: any, b: any) => parseInt(b.revision) - parseInt(a.revision));
+			
+			if (availableRevisions.length === 0) {
+				vscode.window.showWarningMessage(`Cannot rollback: No previous revisions available for "${release.name}"`);
+				return;
+			}
+			
+			const revisions = availableRevisions.map((h: any) => ({
+				label: `📌 Revision ${h.revision}`,
+				description: `Status: ${h.status}`,
+				detail: `Updated: ${h.updated} | ${h.description || 'No description'}`,
+				revision: h.revision.toString()
+			}));
+			
+			console.log('Available revisions for rollback:', revisions);
+			
+			const selectedRevision = await vscode.window.showQuickPick(revisions, {
+				placeHolder: `Rollback "${release.name}" from revision ${release.revision} to:`,
+				title: `Rollback Helm Release: ${release.name}`,
+				ignoreFocusOut: false
+			});
+			
+			console.log('Selected revision:', selectedRevision);
+			
+			if (selectedRevision) {
+				const confirm = await vscode.window.showWarningMessage(
+					`Are you sure you want to rollback "${release.name}" from revision ${release.revision} to revision ${selectedRevision.revision}?`,
+					{ modal: true },
+					'Yes, Rollback'
+				);
+				
+				console.log('User confirmation:', confirm);
+				
+				if (confirm === 'Yes, Rollback') {
+					console.log('Calling helmTreeProvider.rollbackRelease...');
+					await helmTreeProvider.rollbackRelease(release, selectedRevision.revision);
+					console.log('Rollback completed');
+				} else {
+					console.log('User cancelled rollback');
+				}
+			} else {
+				console.log('No revision selected - user dismissed dialog');
+			}
+		} catch (error: any) {
+			console.log('ERROR in rollback command:', error);
+			vscode.window.showErrorMessage(`Rollback failed: ${error.message}`);
 		}
+		
+		console.log('=== HELM ROLLBACK COMMAND ENDED ===');
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('helm-explorer.upgradeRelease', async (item: any) => {

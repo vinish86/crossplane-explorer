@@ -213,14 +213,29 @@ export class HelmTreeProvider implements vscode.TreeDataProvider<HelmItem> {
 
     async rollbackRelease(release: HelmRelease, revision?: string): Promise<void> {
         try {
+            console.log(`=== HELM ROLLBACK EXECUTION ===`);
+            console.log(`Release: ${release.name}, Namespace: ${release.namespace}, Target Revision: ${revision}`);
+            
             const args = ['rollback', release.name, '--namespace', release.namespace];
             if (revision) {
                 args.push(revision);
             }
-            await executeCommand('helm', args);
-            vscode.window.showInformationMessage(`Successfully rolled back Helm release: ${release.name}`);
+            
+            console.log(`Executing: helm ${args.join(' ')}`);
+            const result = await executeCommand('helm', args);
+            console.log(`Rollback result:`, result);
+            
+            vscode.window.showInformationMessage(
+                `✅ Successfully rolled back "${release.name}" to revision ${revision}`
+            );
+            
+            // Refresh the Helm tree to show updated revision
             this.refreshReleases();
+            
+            console.log(`=== HELM ROLLBACK COMPLETED ===`);
         } catch (error: any) {
+            console.log(`=== HELM ROLLBACK FAILED ===`);
+            console.log(`Error:`, error);
             vscode.window.showErrorMessage(`Helm rollback failed: ${error.message}`);
         }
     }
