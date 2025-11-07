@@ -263,7 +263,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                 }
 
                 // Create claim nodes at the root (only those referenced by a composite)
-                const claimNodes = Array.from(claimsMap.values()).map(({ claimRef, composites }) => {
+                const claimNodes = await Promise.all(Array.from(claimsMap.values()).map(async ({ claimRef, composites }) => {
                     const kind = claimRef.kind;
                     const apiVersion = claimRef.apiVersion || '';
                     const group = apiVersion.split('/')[0] || '';
@@ -285,8 +285,10 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     };
                     claimNode.contextValue = 'deployment-flow-claim';
                     (claimNode as any)._childComposites = composites;
+                    const conditions = await this.fetchConditions(resourceType, name, namespace);
+                    this.applyConditionDecorations(claimNode, conditions);
                     return claimNode;
-                });
+                }));
 
                 // Find parent XRs (composites) with no claimRef and no ownerReferences
                 const parentXRs = result.items.filter((item: any) =>
@@ -313,6 +315,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                         title: 'View Resource YAML',
                         arguments: [node]
                     };
+                    this.applyConditionDecorations(node, item.status?.conditions);
                     return node;
                 });
 
@@ -327,7 +330,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
         if (element.contextValue === 'deployment-flow-claim') {
             // Show all top-level XRs for this claim
             const composites = (element as any)._childComposites || [];
-            return composites.map((composite: any) => {
+            return Promise.all(composites.map(async (composite: any) => {
                 const name = composite.metadata.name || '';
                 const kind = composite.kind || '';
                 const apiVersion = composite.apiVersion || '';
@@ -347,8 +350,9 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     title: 'View Resource YAML',
                     arguments: [node]
                 };
+                this.applyConditionDecorations(node, composite.status?.conditions);
                 return node;
-            });
+            }));
         }
         // Komoplane-style composite expansion logic (for XR children)
         if (element.resourceType && (element.resourceType.startsWith('x') || element.resourceType.startsWith('composite'))) {
@@ -358,19 +362,20 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                 ]);
                 const composite = JSON.parse(stdout);
                 const resourceRefs = composite.spec?.resourceRefs || [];
-                return resourceRefs.map((ref: any) => {
+                const childNodes = await Promise.all(resourceRefs.map(async (ref: any) => {
                     const isComposite = ref.kind && ref.kind.startsWith('X');
                     const group = (ref.apiVersion || '').split('/')[0];
                     const resourceType = group ? `${ref.kind.toLowerCase()}.${group}` : ref.kind.toLowerCase();
                     const label = isComposite
                         ? `[XR] | ${ref.kind} | ${ref.name}`
                         : `[MR] | ${ref.kind} | ${ref.name}`;
+                    const nodeNamespace = isComposite ? undefined : (ref.namespace || composite.spec?.claimRef?.namespace || undefined);
                     const resource = new CrossplaneResource(
                         label,
                         isComposite ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
                         resourceType,
                         (ref.name ? ref.name : ''),
-                        isComposite ? '' : (ref.namespace ? ref.namespace : '')
+                        isComposite ? '' : (nodeNamespace || '')
                     );
                     resource.command = {
                         command: 'crossplane-explorer.viewResource',
@@ -383,8 +388,11 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     } else {
                         resource.contextValue = 'managed-resource';
                     }
+                    const conditions = await this.fetchConditions(resourceType, ref.name, nodeNamespace);
+                    this.applyConditionDecorations(resource, conditions);
                     return resource;
-                });
+                }));
+                return childNodes;
             } catch (err: any) {
                 vscode.window.showErrorMessage(`Error fetching composite children: ${err.message}`);
                 return [];
@@ -651,6 +659,88 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
             }
             return [];
         }
+    }
+
+    private async fetchConditions(resourceType: string | undefined, resourceName: string | undefined, namespace?: string): Promise<any[] | undefined> {
+        if (!resourceType || !resourceName) {
+            return undefined;
+        }
+        const args = ['get', resourceType, resourceName];
+        if (namespace) {
+            args.push('-n', namespace);
+        }
+        args.push('-o', 'json');
+        try {
+            const { stdout } = await executeCommand('kubectl', args);
+            const resource = JSON.parse(stdout);
+            return resource?.status?.conditions;
+        } catch (error) {
+            // Silently ignore failures to fetch conditions; the node will remain uncoloured
+            return undefined;
+        }
+    }
+
+    private applyConditionDecorations(node: CrossplaneResource, conditions: any[] | undefined): void {
+        const decoration = this.getConditionDecoration(conditions);
+        if (decoration.summary) {
+            node.description = decoration.summary;
+            if (!node.tooltip) {
+                node.tooltip = decoration.summary;
+            } else if (typeof node.tooltip === 'string' && !node.tooltip.includes(decoration.summary)) {
+                node.tooltip = `${node.tooltip}\n${decoration.summary}`;
+            }
+        }
+        if (decoration.icon) {
+            node.iconPath = decoration.icon;
+        }
+    }
+
+    private getConditionDecoration(conditions: any[] | undefined): { summary?: string; icon?: vscode.ThemeIcon } {
+        if (!conditions || conditions.length === 0) {
+            return {};
+        }
+        let readyStatus: string | undefined;
+        let syncedStatus: string | undefined;
+        for (const condition of conditions) {
+            const type = typeof condition.type === 'string' ? condition.type.toLowerCase() : '';
+            const status = typeof condition.status === 'string' ? condition.status : undefined;
+            if (!status) {
+                continue;
+            }
+            if (type === 'ready') {
+                readyStatus = status;
+            }
+            if (type === 'synced' || type === 'sync') {
+                syncedStatus = status;
+            }
+        }
+        if (!readyStatus && !syncedStatus) {
+            return {};
+        }
+        const segments: string[] = [];
+        if (syncedStatus) {
+            segments.push(`Synced: ${syncedStatus}`);
+        }
+        if (readyStatus) {
+            segments.push(`Ready: ${readyStatus}`);
+        }
+        const summary = segments.join(' | ');
+        const normalizedReady = readyStatus ? readyStatus.toLowerCase() : undefined;
+        const normalizedSynced = syncedStatus ? syncedStatus.toLowerCase() : undefined;
+        const hasFalse = normalizedReady === 'false' || normalizedSynced === 'false';
+        const bothTrue = normalizedReady === 'true' && normalizedSynced === 'true';
+
+        let icon: vscode.ThemeIcon | undefined;
+        if (hasFalse) {
+            icon = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.red'));
+        } else if (bothTrue) {
+            icon = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.green'));
+        }
+
+        return {
+            summary,
+            icon
+        };
     }
 
     private getRootItems(): CrossplaneResource[] {
