@@ -286,7 +286,15 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     claimNode.contextValue = 'deployment-flow-claim';
                     (claimNode as any)._childComposites = composites;
                     const conditions = await this.fetchConditions(resourceType, name, namespace);
-                    this.applyConditionDecorations(claimNode, conditions);
+                    // If any descendant under this claim is red, mark claim orange (unless claim itself is red)
+                    let childHasRed = false;
+                    for (const comp of composites) {
+                        if (await this.hasAnyDescendantRedByCompositeObject(comp)) {
+                            childHasRed = true;
+                            break;
+                        }
+                    }
+                    this.applyConditionDecorations(claimNode, conditions, childHasRed);
                     return claimNode;
                 }));
 
@@ -295,7 +303,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     !item.spec?.claimRef &&
                     (!item.metadata?.ownerReferences || item.metadata.ownerReferences.length === 0)
                 );
-                const parentXRNodes = parentXRs.map((item: any) => {
+                const parentXRNodes = await Promise.all(parentXRs.map(async (item: any) => {
                     const name = item.metadata.name || '';
                     const kind = item.kind || '';
                     const apiVersion = item.apiVersion || '';
@@ -315,9 +323,10 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                         title: 'View Resource YAML',
                         arguments: [node]
                     };
-                    this.applyConditionDecorations(node, item.status?.conditions);
+                    const hasDescendantRed = await this.hasAnyDescendantRedByCompositeName(resourceType, name);
+                    this.applyConditionDecorations(node, item.status?.conditions, hasDescendantRed);
                     return node;
-                });
+                }));
 
                 // Return both claim nodes and parent XR nodes
                 return [...claimNodes, ...parentXRNodes];
@@ -350,7 +359,8 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
                     title: 'View Resource YAML',
                     arguments: [node]
                 };
-                this.applyConditionDecorations(node, composite.status?.conditions);
+                const hasDescendantRed = await this.hasAnyDescendantRedByCompositeObject(composite);
+                this.applyConditionDecorations(node, composite.status?.conditions, hasDescendantRed);
                 return node;
             }));
         }
@@ -680,8 +690,8 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
         }
     }
 
-    private applyConditionDecorations(node: CrossplaneResource, conditions: any[] | undefined): void {
-        const decoration = this.getConditionDecoration(conditions);
+    private applyConditionDecorations(node: CrossplaneResource, conditions: any[] | undefined, childHasRed?: boolean): void {
+        const decoration = this.getConditionDecoration(conditions, childHasRed);
         if (decoration.summary) {
             node.description = decoration.summary;
             if (!node.tooltip) {
@@ -695,7 +705,7 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
         }
     }
 
-    private getConditionDecoration(conditions: any[] | undefined): { summary?: string; icon?: vscode.ThemeIcon } {
+    private getConditionDecoration(conditions: any[] | undefined, childHasRed?: boolean): { summary?: string; icon?: vscode.ThemeIcon } {
         if (!conditions || conditions.length === 0) {
             return {};
         }
@@ -733,6 +743,8 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
         let icon: vscode.ThemeIcon | undefined;
         if (hasFalse) {
             icon = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.red'));
+        } else if (childHasRed) {
+            icon = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.orange'));
         } else if (bothTrue) {
             icon = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.green'));
         }
@@ -741,6 +753,70 @@ export class CrossplaneExplorerProvider implements vscode.TreeDataProvider<Cross
             summary,
             icon
         };
+    }
+
+    private getConditionState(conditions: any[] | undefined): 'red' | 'green' | 'unknown' {
+        if (!conditions || conditions.length === 0) {
+            return 'unknown';
+        }
+        let readyStatus: string | undefined;
+        let syncedStatus: string | undefined;
+        for (const condition of conditions) {
+            const type = typeof condition.type === 'string' ? condition.type.toLowerCase() : '';
+            const status = typeof condition.status === 'string' ? condition.status : undefined;
+            if (type === 'ready') readyStatus = status;
+            if (type === 'synced' || type === 'sync') syncedStatus = status;
+        }
+        const normalizedReady = readyStatus ? readyStatus.toLowerCase() : undefined;
+        const normalizedSynced = syncedStatus ? syncedStatus.toLowerCase() : undefined;
+        const hasFalse = normalizedReady === 'false' || normalizedSynced === 'false';
+        const bothTrue = normalizedReady === 'true' && normalizedSynced === 'true';
+        if (hasFalse) return 'red';
+        if (bothTrue) return 'green';
+        return 'unknown';
+    }
+
+    private async hasAnyDescendantRedByCompositeObject(composite: any): Promise<boolean> {
+        const refs = composite?.spec?.resourceRefs || [];
+        if (!Array.isArray(refs) || refs.length === 0) return false;
+        for (const ref of refs) {
+            try {
+                const isComposite = ref.kind && ref.kind.startsWith('X');
+                const group = (ref.apiVersion || '').split('/')[0];
+                const resourceType = group ? `${ref.kind.toLowerCase()}.${group}` : ref.kind.toLowerCase();
+                const ns = ref.namespace || composite?.spec?.claimRef?.namespace;
+                const conditions = await this.fetchConditions(resourceType, ref.name, ns);
+                // If this referenced resource itself is red
+                if (this.getConditionState(conditions) === 'red') {
+                    return true;
+                }
+                // If it's a composite, recursively check its children
+                if (isComposite) {
+                    const { stdout } = await executeCommand('kubectl', [
+                        'get', resourceType, ref.name, '-o', 'json'
+                    ]);
+                    const childComposite = JSON.parse(stdout);
+                    if (await this.hasAnyDescendantRedByCompositeObject(childComposite)) {
+                        return true;
+                    }
+                }
+            } catch {
+                // ignore errors per-ref
+            }
+        }
+        return false;
+    }
+
+    private async hasAnyDescendantRedByCompositeName(resourceType: string, name: string): Promise<boolean> {
+        try {
+            const { stdout } = await executeCommand('kubectl', [
+                'get', resourceType, name, '-o', 'json'
+            ]);
+            const composite = JSON.parse(stdout);
+            return this.hasAnyDescendantRedByCompositeObject(composite);
+        } catch {
+            return false;
+        }
     }
 
     private getRootItems(): CrossplaneResource[] {
